@@ -59,8 +59,7 @@ begin
     G_ADDR_WIDTH    => G_ADDR_WIDTH,
     G_RAM_STYLE     => G_RAM_STYLE,
     G_RAM_INIT      => G_RAM_INIT,
-    G_RD_LATENCY    => G_RD_LATENCY,
-    G_READ_FIRST    => true
+    G_RD_LATENCY    => G_RD_LATENCY
   )
   port map (
     a_clk  => clk,
