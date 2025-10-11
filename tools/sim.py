@@ -58,18 +58,19 @@ vu.add_com()
 vu.add_osvvm()
 vu.add_verification_components()
 
-# HDL Modules Libraries
+# Libraries
 axi_lite = vu.add_library("axi_lite")
-axi_lite.add_source_files(ROOT_DIR / "lib" / "hdlm" / "hdlm" / "hdl" / "axi_lite_pkg.vhd")
 register_file = vu.add_library("register_file")
-register_file.add_source_files(ROOT_DIR / "lib" / "hdlm" / "hdlm" / "hdl" / "axi_lite_register_file.vhd")
-register_file.add_source_files(ROOT_DIR / "lib" / "hdlm" / "hdlm" / "hdl" / "register_file_pkg.vhd")
-
-# Our library
 lib = vu.add_library("lib")
+
 lib.add_source_files(ROOT_DIR / "src" / "**" / "hdl" / "*.vhd")
 lib.add_source_files(ROOT_DIR / "test" / "**" / "*.vhd")
 lib.add_source_files(ROOT_DIR / "build" / "regs_out" / "**" / "hdl" / "*.vhd")
+
+axi_lite.add_source_files(ROOT_DIR / "src" / "hdlm" / "hdl" / "axi_lite_pkg.vhd")
+
+register_file.add_source_files(ROOT_DIR / "src" / "hdlm" / "hdl" / "axi_lite_register_file.vhd")
+register_file.add_source_files(ROOT_DIR / "src" / "hdlm" / "hdl" / "register_file_pkg.vhd")
 
 
 ################################################################################

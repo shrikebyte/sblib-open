@@ -35,7 +35,7 @@ TEST_DIR := $(MAKEFILE_DIR)test
 BUILD_DIR := $(MAKEFILE_DIR)build
 BUILD_NAME := $(PRJ_NAME)_v$(VER_MAJOR)_$(VER_MINOR)_$(VER_PATCH)
 RELEASE_DIR := $(BUILD_DIR)/$(BUILD_NAME)
-REGS_SRC := $(SRC_DIR)/**/*.toml
+REGS_SRC := $(SRC_DIR)/**/regs/*.toml
 STYLE_SRC := $(SRC_DIR)/**/hdl/*.vhd $(TEST_DIR)/**/*.vhd
 NEW_TAG := v$(VER_MAJOR).$(VER_MINOR).$(VER_PATCH)
 
