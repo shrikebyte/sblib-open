@@ -13,7 +13,7 @@ use ieee.numeric_std.all;
 use work.axi_lite_pkg.all;
 use work.util_pkg.all;
 
-package conv_pkg is
+package hdlm_conv_pkg is
 
   function to_hdlm (
     axil_req : axil_req_t
@@ -25,7 +25,7 @@ package conv_pkg is
 
 end package;
 
-package body conv_pkg is
+package body hdlm_conv_pkg is
 
   function to_hdlm (
     axil_req : axil_req_t
@@ -33,15 +33,15 @@ package body conv_pkg is
     variable axi_lite_m2s : axi_lite_m2s_t := axi_lite_m2s_init;
   begin
 
-    axi_lite_m2s.read.ar.valid                                  := axil_req.arvalid;
-    axi_lite_m2s.read.ar.addr(AXIL_ADDR_WIDTH - 1 downto 0)     := unsigned(axil_req.araddr);
-    axi_lite_m2s.read.r.ready                                   := axil_req.rready;
-    axi_lite_m2s.write.aw.valid                                 := axil_req.awvalid;
-    axi_lite_m2s.write.aw.addr(AXIL_ADDR_WIDTH - 1 downto 0)    := unsigned(axil_req.awaddr);
-    axi_lite_m2s.write.w.valid                                  := axil_req.wvalid;
-    axi_lite_m2s.write.w.data(AXIL_DATA_WIDTH - 1 downto 0)     := axil_req.wdata;
-    axi_lite_m2s.write.w.strb(AXIL_DATA_WIDTH / 8 - 1 downto 0) := axil_req.wstrb;
-    axi_lite_m2s.write.b.ready                                  := axil_req.bready;
+    axi_lite_m2s.read.ar.valid                  := axil_req.arvalid;
+    axi_lite_m2s.read.ar.addr(axil_addr_range)  := unsigned(axil_req.araddr);
+    axi_lite_m2s.read.r.ready                   := axil_req.rready;
+    axi_lite_m2s.write.aw.valid                 := axil_req.awvalid;
+    axi_lite_m2s.write.aw.addr(axil_addr_range) := unsigned(axil_req.awaddr);
+    axi_lite_m2s.write.w.valid                  := axil_req.wvalid;
+    axi_lite_m2s.write.w.data(axil_data_range)  := axil_req.wdata;
+    axi_lite_m2s.write.w.strb(axil_strb_range)  := axil_req.wstrb;
+    axi_lite_m2s.write.b.ready                  := axil_req.bready;
 
     return axi_lite_m2s;
   end function;
@@ -54,7 +54,7 @@ package body conv_pkg is
 
     axil_rsp.arready := axi_lite_s2m.read.ar.ready;
     axil_rsp.rvalid  := axi_lite_s2m.read.r.valid;
-    axil_rsp.rdata   := axi_lite_s2m.read.r.data(AXIL_DATA_WIDTH - 1 downto 0);
+    axil_rsp.rdata   := axi_lite_s2m.read.r.data(axil_data_range);
     axil_rsp.rresp   := axi_lite_s2m.read.r.resp;
     axil_rsp.awready := axi_lite_s2m.write.aw.ready;
     axil_rsp.wready  := axi_lite_s2m.write.w.ready;

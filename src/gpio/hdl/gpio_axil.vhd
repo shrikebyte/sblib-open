@@ -10,9 +10,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use work.axi_lite_pkg.all;
 use work.util_pkg.all;
-use work.conv_pkg.all;
 use work.gpio_regs_pkg.all;
 use work.gpio_register_record_pkg.all;
 use work.gpio_pkg.all;
@@ -44,8 +42,6 @@ end entity;
 
 architecture rtl of gpio_axil is
 
-  signal axi_lite_m2s : axi_lite_m2s_t;
-  signal axi_lite_s2m : axi_lite_s2m_t;
   signal i            : gpio_regs_up_t         := gpio_regs_up_init;
   signal o            : gpio_regs_down_t       := gpio_regs_down_init;
   signal r            : gpio_reg_was_read_t    := gpio_reg_was_read_init;
@@ -70,16 +66,13 @@ begin
   port map (
     clk             => clk,
     reset           => srst,
-    axi_lite_m2s    => axi_lite_m2s,
-    axi_lite_s2m    => axi_lite_s2m,
+    s_axil_req      => s_axil_req,
+    s_axil_rsp      => s_axil_rsp,
     regs_up         => i,
     regs_down       => o,
     reg_was_read    => r,
     reg_was_written => w
   );
-
-  axi_lite_m2s <= to_hdlm(s_axil_req);
-  s_axil_rsp   <= to_hdlm(axi_lite_s2m);
 
   -- ---------------------------------------------------------------------------
   prc_irq_reduce : process (clk) is begin
