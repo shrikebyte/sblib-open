@@ -15,7 +15,7 @@ from enum import Enum
 # Import test configurations
 # ..they are in a separate file so that this common sim script can be
 # maintained separately from repo-specific test configurations.
-from .sim_configs import add_configs
+import sim_configs
 
 ################################################################################
 # Setup
@@ -71,7 +71,7 @@ lib.add_source_files(ROOT_DIR / "build" / "regs_out" / "**" / "hdl" / "*.vhd", a
 # Test bench configurations
 ################################################################################
 
-add_configs(lib)
+sim_configs.add_configs(lib)
 
 
 ################################################################################

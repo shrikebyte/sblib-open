@@ -11,3 +11,4 @@ regs_out/
 vivado_out/
 coverage_data
 coverage.txt
+__pycache__
