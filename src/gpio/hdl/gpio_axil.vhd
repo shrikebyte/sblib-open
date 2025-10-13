@@ -9,7 +9,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
 use work.util_pkg.all;
 use work.gpio_regs_pkg.all;
 use work.gpio_register_record_pkg.all;
@@ -42,10 +41,10 @@ end entity;
 
 architecture rtl of gpio_axil is
 
-  signal i            : gpio_regs_up_t         := gpio_regs_up_init;
-  signal o            : gpio_regs_down_t       := gpio_regs_down_init;
-  signal r            : gpio_reg_was_read_t    := gpio_reg_was_read_init;
-  signal w            : gpio_reg_was_written_t := gpio_reg_was_written_init;
+  signal i : gpio_regs_up_t         := gpio_regs_up_init;
+  signal o : gpio_regs_down_t       := gpio_regs_down_init;
+  signal r : gpio_reg_was_read_t    := gpio_reg_was_read_init;
+  signal w : gpio_reg_was_written_t := gpio_reg_was_written_init;
 
   signal irq_pre     : std_logic_vector(gpio_range);
   signal regi_din    : slv_arr_t(gpio_range)(AXIL_DATA_RANGE);

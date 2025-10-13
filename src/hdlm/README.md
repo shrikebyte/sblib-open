@@ -6,3 +6,5 @@ Only the register-related files have been copied over. Since only three files fr
 
 These files have been minimally changed so that they are not tied to specific
 vhdl library namespaces.
+
+The hdlm_conv_pkg was added by sblib as a converter interface between the hdl modules axi lite interface and the sblib interface.
