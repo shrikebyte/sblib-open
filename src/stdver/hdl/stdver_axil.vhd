@@ -10,7 +10,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
 use work.util_pkg.all;
 use work.stdver_regs_pkg.all;
 use work.stdver_register_record_pkg.all;
@@ -40,10 +39,10 @@ end entity;
 architecture rtl of stdver_axil is
 
   -- ---------------------------------------------------------------------------
-  signal i            : stdver_regs_up_t         := stdver_regs_up_init;
-  signal o            : stdver_regs_down_t       := stdver_regs_down_init;
-  signal r            : stdver_reg_was_read_t    := stdver_reg_was_read_init;
-  signal w            : stdver_reg_was_written_t := stdver_reg_was_written_init;
+  signal i : stdver_regs_up_t         := stdver_regs_up_init;
+  signal o : stdver_regs_down_t       := stdver_regs_down_init;
+  signal r : stdver_reg_was_read_t    := stdver_reg_was_read_init;
+  signal w : stdver_reg_was_written_t := stdver_reg_was_written_init;
 
 begin
 
