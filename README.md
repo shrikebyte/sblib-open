@@ -10,22 +10,14 @@ generic and reusable HDL building blocks.
 This repository is hosted on [GitHub](https://github.com/shrikebyte/sblib)
 and can be directly cloned using this command:
 
-`git clone https://github.com/shrikebyte/sblib.git`
+`git clone https://github.com/shrikebyte/sblib-open.git`
 
 ### Install Project Tools
 
-- Vivado 2024.2
 - HDL Registers 8.0.0
 - VHDL Style Guide 3.30.0
 - VUnit 5.0.0.dev6
 - GHDL latest
-
-#### Install Vivado
-
-Vivado can be [downloaded here](https://www.xilinx.com/support/download.html).
-
-For detailed instructions, including hardware and OS requirements, see
-[Xilinx UG973](https://docs.amd.com/r/en-US/ug973-vivado-release-notes-install-license).
 
 #### Install Python Tools
 
