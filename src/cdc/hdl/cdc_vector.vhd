@@ -33,26 +33,25 @@ end entity;
 architecture rtl of cdc_vector is
 
   -- ---------------------------------------------------------------------------
-  signal s_xact           : std_logic;
-  signal src_data_reg     : std_logic_vector(G_WIDTH - 1 downto 0);
-  signal src_req_pulse    : std_logic := '0';
-  signal src_ack_pulse    : std_logic;
-  signal dst_req_pulse    : std_logic;
-  signal dst_ack_pulse    : std_logic;
+  signal s_xact        : std_logic;
+  signal src_data_reg  : std_logic_vector(G_WIDTH - 1 downto 0);
+  signal src_req_pulse : std_logic := '0';
+  signal src_ack_pulse : std_logic;
+  signal dst_req_pulse : std_logic;
+  signal dst_ack_pulse : std_logic;
 
 begin
 
   -- Detect a new request & register the input data
   prc_new_request : process (s_clk) is begin
     if rising_edge(s_clk) then
-
       src_req_pulse <= s_xact;
 
       if s_xact then
         src_data_reg <= s_data;
         s_ready      <= '0';
       elsif src_ack_pulse then
-        s_ready      <= '1';
+        s_ready <= '1';
       end if;
 
     end if;
@@ -67,10 +66,10 @@ begin
     G_USE_FEEDBACK => false
   )
   port map (
-    src_clk      => s_clk,
-    src_pulse    => src_req_pulse,
-    dst_clk      => m_clk,
-    dst_pulse    => dst_req_pulse
+    src_clk   => s_clk,
+    src_pulse => src_req_pulse,
+    dst_clk   => m_clk,
+    dst_pulse => dst_req_pulse
   );
 
   -- Hold destination valid high until destination is ready to accept
@@ -96,10 +95,10 @@ begin
     G_USE_FEEDBACK => false
   )
   port map (
-    src_clk      => m_clk,
-    src_pulse    => dst_ack_pulse,
-    dst_clk      => s_clk,
-    dst_pulse    => src_ack_pulse
+    src_clk   => m_clk,
+    src_pulse => dst_ack_pulse,
+    dst_clk   => s_clk,
+    dst_pulse => src_ack_pulse
   );
 
 end architecture;

@@ -34,9 +34,9 @@ end entity;
 architecture rtl of cdc_pulse is
 
   -- ---------------------------------------------------------------------------
-  signal src_toggl      : std_logic := '0';
-  signal dst_toggl_cdc  : std_logic_vector(G_SYNC_LEN - 1 downto 0) := (others => '0');
-  signal dst_toggl_ff   : std_logic := '0';
+  signal src_toggl     : std_logic                                 := '0';
+  signal dst_toggl_cdc : std_logic_vector(G_SYNC_LEN - 1 downto 0) := (others => '0');
+  signal dst_toggl_ff  : std_logic                                 := '0';
 
   -- ---------------------------------------------------------------------------
   attribute async_reg                      : string;
@@ -51,9 +51,9 @@ begin
   -- ---------------------------------------------------------------------------
   gen_src : if G_USE_FEEDBACK generate
 
-    signal src_toggl_fdbk_cdc    : std_logic_vector(G_SYNC_LEN - 1 downto 0) := (others => '0');
-    signal src_toggl_fdbk_ff     : std_logic := '0';
-    signal src_locked            : std_logic := '0';
+    signal src_toggl_fdbk_cdc : std_logic_vector(G_SYNC_LEN - 1 downto 0) := (others => '0');
+    signal src_toggl_fdbk_ff  : std_logic := '0';
+    signal src_locked         : std_logic := '0';
 
     -- ---------------------------------------------------------------------------
     attribute async_reg of src_toggl_fdbk_cdc     : signal is "TRUE";
@@ -64,7 +64,6 @@ begin
     -- Create a toggle when src pulse is detected
     prc_src : process (src_clk) is begin
       if rising_edge(src_clk) then
-
         src_toggl_fdbk_cdc <= src_toggl_fdbk_cdc(G_SYNC_LEN - 2 downto 0) & dst_toggl_cdc(G_SYNC_LEN - 1);
         src_toggl_fdbk_ff  <= src_toggl_fdbk_cdc(G_SYNC_LEN - 1);
 
@@ -94,7 +93,7 @@ begin
   end generate;
 
   -- CDC regs for destination toggle
-  prc_dst: process (dst_clk) is begin
+  prc_dst : process (dst_clk) is begin
     if rising_edge(dst_clk) then
       dst_toggl_cdc <= dst_toggl_cdc(G_SYNC_LEN - 2 downto 0) & src_toggl;
       dst_toggl_ff  <= dst_toggl_cdc(G_SYNC_LEN - 1);
