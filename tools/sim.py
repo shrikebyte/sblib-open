@@ -34,6 +34,7 @@ os.chdir(SCRIPT_DIR)
 # Argument handling
 argv = sys.argv[1:]
 SIMULATOR = Simulator.GHDL
+GENERATE_VHDL_LS_TOML = False
 
 # Simulator Selection
 # ..The environment variable VUNIT_SIMULATOR has precedence over the commandline
@@ -44,6 +45,9 @@ if "--ghdl" in sys.argv:
 if "--nvc" in sys.argv:
     SIMULATOR = Simulator.NVC
     argv.remove("--nvc")
+if "--vhdl_ls" in sys.argv:
+    GENERATE_VHDL_LS_TOML = True
+    argv.remove("--vhdl_ls")
 
 # The simulator must be chosen before sources are added
 if 'VUNIT_SIMULATOR' not in os.environ:    
@@ -82,6 +86,13 @@ lib.add_compile_option('ghdl.a_flags', ['-frelaxed-rules', '-Wno-hide', '-Wno-sh
 lib.add_compile_option('nvc.a_flags', ['--relaxed'])
 lib.set_sim_option('ghdl.elab_flags', ['-frelaxed'])
 lib.set_sim_option('nvc.heap_size', '5000M')
+
+# Generate VHDL LS Config if needed
+if GENERATE_VHDL_LS_TOML:
+    from create_vhdl_ls_config import create_configuration
+    from pathlib import Path
+    create_configuration(output_path=Path('..'), vunit_proj=vu)
+    exit(0)
 
 # Run
 vu.main()
