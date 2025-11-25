@@ -1,5 +1,5 @@
 --##############################################################################
---# File : axil_master_tb.vhd
+--# File : axil_init_mgr_tb.vhd
 --# Auth : David Gussler
 --# Lang : VHDL '08
 --# ============================================================================
@@ -17,13 +17,13 @@ library vunit_lib;
 use vunit_lib.axi_lite_master_pkg.all;
 use vunit_lib.wishbone_pkg.all;
 
-entity axil_master_tb is
+entity axil_init_mgr_tb is
   generic (
     RUNNER_CFG : string
   );
 end entity;
 
-architecture tb of axil_master_tb is
+architecture tb of axil_init_mgr_tb is
 
   -- Testbench constants
   constant CLK_PERIOD : time := 10 ns;
@@ -191,7 +191,7 @@ begin
   clk <= not clk after CLK_PERIOD / 2;
 
   -- ---------------------------------------------------------------------------
-  u_axil_master : entity work.axil_master
+  u_axil_master : entity work.axil_init_mgr
   generic map (
     G_RESET_DELAY_CLKS => 16,
     G_XACTIONS         => XACTIONS

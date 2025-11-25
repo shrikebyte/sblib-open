@@ -1,10 +1,10 @@
 --##############################################################################
---# File : axil_master.vhd
+--# File : axil_init_mgr.vhd
 --# Auth : David Gussler
 --# Lang : VHDL '08
 --# ============================================================================
---! This is a generic axi-lite master state machine
---! that runs a hard-coded sequence of read and write transactions after reset.
+--! AXI-Lite initialization manager state machine.
+--! This runs a hard-coded sequence of read and write transactions after reset.
 --! Intended to configure an FPGA at startup / reset without the need for
 --! software init scripts or a soft-processor. This can also be used to run a
 --! BIST at startup by checking register values to ensure they match expected.
@@ -15,10 +15,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.util_pkg.all;
 
-library ieee;
-use ieee.std_logic_1164.all;
-
-entity axil_master is
+entity axil_init_mgr is
   generic (
     G_RESET_DELAY_CLKS : positive := 10;
     G_XACTIONS         : bus_xact_arr_t
@@ -44,7 +41,7 @@ entity axil_master is
   );
 end entity;
 
-architecture rtl of axil_master is
+architecture rtl of axil_init_mgr is
 
   constant NUM_XACTIONS : integer := G_XACTIONS'length;
 
@@ -65,7 +62,7 @@ begin
   m_axil_req.arprot <= b"000";
 
   -- ---------------------------------------------------------------------------
-  prc_axil_master : process (clk) is begin
+  prc_axil_init_mgr : process (clk) is begin
     if rising_edge(clk) then
       -- Pulse
       m_sts_valid <= '0';
@@ -118,7 +115,8 @@ begin
             m_sts_valid    <= '1';
             m_sts_xact_idx <= to_unsigned(idx, m_sts_xact_idx'length);
             m_sts_chk_err  <= '0';
-            if m_axil_rsp.bresp = AXI_RSP_SLVERR or m_axil_rsp.bresp = AXI_RSP_DECERR then
+            if m_axil_rsp.bresp = AXI_RSP_SLVERR or
+               m_axil_rsp.bresp = AXI_RSP_DECERR then
               m_sts_bus_err <= '1';
             else
               m_sts_bus_err <= '0';
@@ -145,10 +143,12 @@ begin
             m_sts_valid     <= '1';
             m_sts_xact_idx  <= to_unsigned(idx, m_sts_xact_idx'length);
             m_sts_chk_rdata <= m_axil_rsp.rdata;
-            if m_axil_rsp.rresp = AXI_RSP_SLVERR or m_axil_rsp.rresp = AXI_RSP_DECERR then
+            if m_axil_rsp.rresp = AXI_RSP_SLVERR or
+               m_axil_rsp.rresp = AXI_RSP_DECERR then
               m_sts_bus_err <= '1';
               m_sts_chk_err <= '0';
-            elsif (m_axil_rsp.rdata and G_XACTIONS(idx).mask) /= (G_XACTIONS(idx).data and G_XACTIONS(idx).mask) then
+            elsif (m_axil_rsp.rdata and G_XACTIONS(idx).mask) /=
+                  (G_XACTIONS(idx).data and G_XACTIONS(idx).mask) then
               m_sts_bus_err <= '0';
               m_sts_chk_err <= '1';
             else

@@ -199,6 +199,10 @@ package util_pkg is
     vec : std_logic_vector
   ) return natural;
 
+  function to_sl (
+    val : boolean
+  ) return std_logic;
+
 end package;
 
 package body util_pkg is
@@ -300,7 +304,8 @@ package body util_pkg is
   end function;
 
   -- ---------------------------------------------------------------------------
-  -- Find the left-most index of an slv that is '1'. If no match, return left-most idx.
+  -- Find the left-most index of an slv that is '1'. If no match, return
+  -- left-most idx.
   function find_hi_idx (
     vec : std_logic_vector
   ) return natural is
@@ -314,7 +319,8 @@ package body util_pkg is
   end function;
 
   -- ---------------------------------------------------------------------------
-  -- Find the right-most index of an slv that is '1'. If no match, return left-most idx.
+  -- Find the right-most index of an slv that is '1'. If no match, return
+  -- left-most idx.
   function find_lo_idx (
     vec : std_logic_vector
   ) return natural is
@@ -325,6 +331,19 @@ package body util_pkg is
       end if;
     end loop;
     return vec'high;
+  end function;
+
+  -- ---------------------------------------------------------------------------
+  -- Convert a boolean to standard logic
+  function to_sl (
+    val : boolean
+  ) return std_logic is
+  begin
+    if val then
+      return '1';
+    else
+      return '0';
+    end if;
   end function;
 
 end package body;
