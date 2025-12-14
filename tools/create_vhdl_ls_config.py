@@ -30,7 +30,6 @@ def create_configuration(  # noqa: C901
 
     Arguments:
         output_path: vhdl_ls.toml file will be placed in this folder.
-        modules: All files from these modules will be added.
         vunit_proj: All files in this VUnit project will be added.
             This includes the files from VUnit itself, and any user files.
 
@@ -41,7 +40,7 @@ def create_configuration(  # noqa: C901
             Can be used to add additional files outside of the modules or the VUnit project.
             The list shall contain tuples: ``(Path, "library name")``.
     """
-    toml_data: dict[str, dict[str, Any]] = {"libraries": {}}
+    toml_data: dict[str, Any] = {"standard": "2019", "libraries": {}}
 
     def add_file(file_path: Path, library_name: str) -> None:
         """

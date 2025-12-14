@@ -1,0 +1,181 @@
+--##############################################################################
+--# File : axis_resize.vhd
+--# Auth : David Gussler
+--# Lang : VHDL'19
+--# ============================================================================
+--! AXI-Stream resizer.
+--! Like most other axi stream IP, this only works properly if tkeep is
+--! high on all beats except for tlast, and on tlast, upper tkeep bits should
+--! be zero and lower bits should be 1.
+--! When upsizing, data width, keep width, and user width should all be
+--! powers of 2. Otherwise, multiplies will be inferred, greatly increasing
+--! logic utilization.
+--! This has a comb tready path. Insert an axi stream pipeline stage before
+--! the input of this module, if needed to improve timing.
+--##############################################################################
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.util_pkg.all;
+use work.axis_pkg.all;
+
+entity axis_resize is
+  port (
+    clk    : in    std_ulogic;
+    srst   : in    std_ulogic;
+    --
+    s_axis : view s_axis_v;
+    --
+    m_axis : view m_axis_v;
+  );
+end entity;
+
+architecture rtl of axis_resize is
+
+  constant S_DW  : integer := s_axis.tdata'length;
+  constant S_KW  : integer := s_axis.tkeep'length;
+  constant S_UW  : integer := s_axis.tuser'length;
+  constant S_DBW : integer := S_DW / S_KW;
+  constant S_UBW : integer := S_UW / S_KW;
+  constant M_DW  : integer := m_axis.tdata'length;
+  constant M_KW  : integer := m_axis.tkeep'length;
+  constant M_UW  : integer := m_axis.tuser'length;
+  constant M_DBW : integer := M_DW / M_KW;
+  constant M_UBW : integer := M_UW / M_KW;
+
+begin
+
+  -- ---------------------------------------------------------------------------
+  assert S_DBW = M_DBW
+    report "S_DBW must match M_DBW. Data byte widths are implicitly defined as the ratio of data width to keep width."
+    severity error;
+
+  assert S_UBW = M_UBW
+    report "S_UBW must match M_UBW. User byte widths are implicitly defined as the ratio of user width to keep width."
+    severity error;
+
+
+  -- ---------------------------------------------------------------------------
+  -- Passthrough mode
+  gen_resize_mode : if S_DW = M_DW generate
+  begin
+
+    s_axis.tready <= m_axis.tready;
+    m_axis.tvalid <= s_axis.tvalid;
+    m_axis.tlast  <= s_axis.tlast;
+    m_axis.tdata  <= s_axis.tdata;
+    m_axis.tkeep  <= s_axis.tkeep;
+    m_axis.tuser  <= s_axis.tuser;
+
+
+  -- ---------------------------------------------------------------------------
+  -- Downsize mode
+  elsif S_DW > M_DW generate
+    signal last_reg  : std_ulogic;
+    signal data_reg : std_ulogic_vector(S_DW-1 downto 0);
+    signal user_reg : std_ulogic_vector(S_UW-1 downto 0);
+    signal keep_reg : std_ulogic_vector(S_KW-1 downto 0);
+    signal data_reg_shft : std_ulogic_vector(S_DW-1 downto 0);
+    signal user_reg_shft : std_ulogic_vector(S_UW-1 downto 0);
+    signal keep_reg_shft : std_ulogic_vector(S_KW-1 downto 0);
+    signal keep_reg_shft_is_zero : std_logic;
+  begin
+
+    -- Input is ready whenever there is room in the output buffer AND the
+    -- shift register is empty.
+    s_axis.tready <= (m_axis.tready or not m_axis.tvalid) and keep_reg_shft_is_zero;
+
+    data_reg_shft <= std_ulogic_vector(shift_right(u_unsigned(data_reg), M_DW));
+    user_reg_shft <= std_ulogic_vector(shift_right(u_unsigned(user_reg), M_UW));
+    keep_reg_shft <= std_ulogic_vector(shift_right(u_unsigned(keep_reg), M_KW));
+    keep_reg_shft_is_zero <= and (not keep_reg_shft);
+
+    prc_downsize : process (clk) begin
+      if rising_edge(clk) then
+
+        if s_axis.tvalid and s_axis.tready then
+          -- New wide beat at input... Send the first narrow output beat.
+
+          m_axis.tvalid <= '1';
+          last_reg <= s_axis.tlast;
+          data_reg <= s_axis.tdata;
+          user_reg <= s_axis.tuser;
+          keep_reg <= s_axis.tkeep;
+
+        elsif m_axis.tvalid and m_axis.tready then
+          -- Shift out the narrow output data from the wide input data.
+
+          data_reg <= data_reg_shft;
+          user_reg <= user_reg_shft;
+          keep_reg <= keep_reg_shft;
+
+          -- Stop sending output data when the shift register is empty.
+          if keep_reg_shft_is_zero then
+            m_axis.tvalid <= '0';
+            last_reg <= '0';
+          end if;
+
+        end if;
+
+        if srst then 
+          m_axis.tvalid <= '0';
+          keep_reg <= (others => '0');
+        end if;
+      end if;
+    end process;
+
+    m_axis.tdata <= data_reg(m_axis.tdata'range);
+    m_axis.tuser <= user_reg(m_axis.tdata'range);
+    m_axis.tkeep <= keep_reg(m_axis.tkeep'range);
+    m_axis.tlast <= last_reg and keep_reg_shft_is_zero;
+
+
+  -- ---------------------------------------------------------------------------
+  -- Upsize mode
+  else generate
+    constant CNT_MAX : integer := (M_DW / S_DW) - 1;
+    signal cnt : integer range 0 to CNT_MAX;
+  begin
+
+    s_axis.tready <= m_axis.tready or not m_axis.tvalid;
+
+    prc_upsize : process (clk) begin
+      if rising_edge(clk) then
+        if s_axis.tvalid and s_axis.tready then
+          -- New narrow beat at input
+
+          if cnt = 0 then
+            -- If first narrow input beat of a new wide output beat, copy
+            -- narrow tkeep to the lsbs of wide tkeep and set the msbs to 0
+            m_axis.tkeep(s_axis.tkeep'high downto s_axis.tkeep'low)      <= s_axis.tkeep;
+            m_axis.tkeep(m_axis.tkeep'high downto s_axis.tkeep'high + 1) <= (others=>'0');
+          else
+            m_axis.tkeep(cnt * S_KW + S_KW - 1 downto cnt * S_KW) <= s_axis.tkeep;
+          end if;
+          m_axis.tdata(cnt * S_DW + S_DW - 1 downto cnt * S_DW) <= s_axis.tdata;
+          m_axis.tuser(cnt * S_UW + S_UW - 1 downto cnt * S_UW) <= s_axis.tuser;
+          m_axis.tlast <= s_axis.tlast;
+
+          if cnt = CNT_MAX or s_axis.tlast = '1' then
+            m_axis.tvalid <= '1';
+            cnt <= 0;
+          else
+            m_axis.tvalid <= '0';
+            cnt <= cnt + 1;
+          end if;
+
+        elsif m_axis.tready then
+          m_axis.tvalid <= '0';
+        end if;
+
+        if srst then 
+          m_axis.tvalid <= '0';
+          cnt <= 0;
+        end if;
+      end if;
+    end process;
+  
+  end generate;
+
+end architecture;

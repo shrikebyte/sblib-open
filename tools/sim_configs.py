@@ -87,3 +87,84 @@ def add_configs(lib):
             'G_RD_LATENCY': rd_latency,
             'G_AXIS_STALL_PROB': stall_prob,
         })
+
+
+    ############################################################################
+    tb = lib.test_bench('axis_mux_tb')
+
+    enable_jitter = [True]
+    low_area = [True, False]
+
+    for enable_jitter, low_area in product(enable_jitter, low_area):
+      sim_utils.named_config(tb, {
+            'G_ENABLE_JITTER': enable_jitter,
+            'G_LOW_AREA': low_area,
+        })
+      
+    ############################################################################
+    tb = lib.test_bench('axis_arb_tb')
+
+    enable_jitter = [True]
+    low_area = [False]
+
+    for enable_jitter, low_area in product(enable_jitter, low_area):
+      sim_utils.named_config(tb, {
+            'G_ENABLE_JITTER': enable_jitter,
+            'G_LOW_AREA': low_area,
+        })
+
+    ############################################################################
+    tb = lib.test_bench('axis_demux_tb')
+
+    enable_jitter = [True]
+    low_area = [True, False]
+
+    for enable_jitter, low_area in product(enable_jitter, low_area):
+      sim_utils.named_config(tb, {
+            'G_ENABLE_JITTER': enable_jitter,
+            'G_LOW_AREA': low_area,
+        })
+
+    ############################################################################
+    tb = lib.test_bench('axis_pipe_tb')
+
+    enable_jitter = [True]
+    ready_pipe = [True, False]
+    data_pipe = [True, False]
+
+    for enable_jitter, ready_pipe, data_pipe in product(enable_jitter, ready_pipe, data_pipe):
+      sim_utils.named_config(tb, {
+            'G_ENABLE_JITTER': enable_jitter,
+            'G_READY_PIPE': ready_pipe,
+            'G_DATA_PIPE': data_pipe,
+        })
+
+    ############################################################################
+    tb = lib.test_bench('axis_resize_tb')
+
+    enable_jitter = [True]
+    s_dw = [8, 32, 64, 128]
+    m_dw = [32]
+    s_uw = [16]
+
+    for enable_jitter, s_dw, m_dw, s_uw in product(enable_jitter, s_dw, m_dw, s_uw):
+      sim_utils.named_config(tb, {
+            'G_ENABLE_JITTER': enable_jitter,
+            'G_S_DW': s_dw,
+            'G_M_DW': m_dw,
+            'G_S_UW': s_uw,
+        })
+
+    ############################################################################
+    tb = lib.test_bench('axis_merge_tb')
+
+    enable_jitter = [True, False]
+    dw = [32]
+    kw = [4]
+
+    for enable_jitter, dw, kw in product(enable_jitter, dw, kw):
+      sim_utils.named_config(tb, {
+            'G_ENABLE_JITTER': enable_jitter,
+            'G_DW': dw,
+            'G_KW': kw
+        })

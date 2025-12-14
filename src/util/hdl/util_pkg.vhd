@@ -171,6 +171,10 @@ package util_pkg is
     vec : std_logic_vector
   ) return natural;
 
+  function cnt_ones (
+    vec : u_unsigned
+  ) return natural;
+
   function is_onehot (
     vec : std_logic_vector
   ) return boolean;
@@ -203,9 +207,14 @@ package util_pkg is
     vec : std_logic_vector
   ) return natural;
 
-  function to_sl (
-    val : boolean
-  ) return std_logic;
+  function to_sl (val : boolean) return std_ulogic;
+  function to_sl(val : natural range 0 to 1) return std_ulogic;
+  function to_bool(val : std_ulogic) return boolean;
+  function to_bool(val : natural range 0 to 1) return boolean;
+  function "and" (left : boolean; right: std_ulogic) return boolean;
+  function "and" (left : std_ulogic; right: boolean) return boolean;
+  function "and" (left : boolean; right: std_ulogic) return std_ulogic;
+  function "and" (left : std_ulogic; right: boolean) return std_ulogic;
 
   function find_max (
     arr : int_arr_t
@@ -239,6 +248,19 @@ package body util_pkg is
   -- Count the number of ones in a vector.
   function cnt_ones (
     vec : std_logic_vector
+  ) return natural is
+    variable tmp : natural := 0;
+  begin
+    for i in vec'range loop
+      if vec(i) = '1' then
+        tmp := tmp + 1;
+      end if;
+    end loop;
+    return tmp;
+  end function;
+
+  function cnt_ones (
+    vec : u_unsigned
   ) return natural is
     variable tmp : natural := 0;
   begin
@@ -363,15 +385,55 @@ package body util_pkg is
 
   -- ---------------------------------------------------------------------------
   -- Convert a boolean to standard logic
-  function to_sl (
-    val : boolean
-  ) return std_logic is
+  function to_sl(val : boolean) return std_ulogic is
   begin
     if val then
       return '1';
-    else
-      return '0';
     end if;
+    return '0';
+  end function;
+
+  function to_sl(val : natural range 0 to 1) return std_ulogic is
+  begin
+    if val = 1 then
+      return '1';
+    end if;
+    return '0';
+  end function;
+
+  function to_bool(val : std_ulogic) return boolean is
+  begin
+    if val = '1' then
+      return true;
+    end if;
+    return false;
+  end function;
+
+  function to_bool(val : natural range 0 to 1) return boolean is
+  begin
+    return val = 1;
+  end function;
+
+  -- ---------------------------------------------------------------------------
+  -- Allow "and'ing" bools with std_logic
+  function "and" (left : boolean; right: std_ulogic) return boolean is
+  begin
+    return left and (right = '1');
+  end function;
+
+  function "and" (left : std_ulogic; right: boolean) return boolean is
+  begin
+    return (left = '1') and right;
+  end function;
+
+  function "and" (left : boolean; right: std_ulogic) return std_ulogic is
+  begin
+    return to_sl(left) and right;
+  end function;
+
+  function "and" (left : std_ulogic; right: boolean) return std_ulogic is
+  begin
+    return left and to_sl(right);
   end function;
 
   -- ---------------------------------------------------------------------------

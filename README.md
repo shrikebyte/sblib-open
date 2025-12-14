@@ -43,6 +43,9 @@ installed with:
 
 ### Test
 
+> [!WARNING]
+> Development happens on the main branch. As a consequence, main is not guaranteed to be stable or to build properly every time, as it is always in a state of progress. Use tagged releases for the most stable experience.
+
 Walk through the following steps to run the simulations.
 
 1. Ensure the required build tools have been properly installed and made
