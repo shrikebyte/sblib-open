@@ -223,8 +223,8 @@ begin
     m_axis.tready <= '0';
 
     if m_axis.tvalid then
-      bfm_m_tvalid(to_integer(unsigned(m_axis.tuser))) <= m_axis.tvalid;
-      m_axis.tready <= bfm_m_tready(to_integer(unsigned(m_axis.tuser)));
+      bfm_m_tvalid(to_integer(unsigned(m_axis.tuser(UBW - 1 downto 0)))) <= m_axis.tvalid;
+      m_axis.tready <= bfm_m_tready(to_integer(unsigned(m_axis.tuser(UBW - 1 downto 0))));
     end if;
 
   end process;

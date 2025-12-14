@@ -17,8 +17,8 @@ use ieee.numeric_std.all;
 use work.util_pkg.all;
 
 library vunit_lib;
-  context vunit_lib.vunit_context;
-  context vunit_lib.vc_context;
+context vunit_lib.vunit_context;
+context vunit_lib.vc_context;
 
 entity bfm_axil_man is
   generic (

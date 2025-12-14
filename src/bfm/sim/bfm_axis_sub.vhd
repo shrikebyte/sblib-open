@@ -116,6 +116,12 @@ architecture sim of bfm_axis_sub is
   signal checker_is_ready : std_ulogic := '0';
   signal data_is_ready : std_ulogic := '0';
 
+  signal mon_axis : axis_t(
+    tdata(s_axis.tdata'range),
+    tuser(s_axis.tuser'range),
+    tkeep(s_axis.tkeep'range)
+  );
+
 begin
 
   assert DW mod KW = 0 report (
@@ -161,7 +167,7 @@ begin
             is_last_beat,
             (
               BASE_ERROR_MESSAGE
-              & ": 'tlast' check at packet_idx="
+              & "'tlast' check at packet_idx="
               & to_string(num_packets_checked)
               & ",byte_idx="
               & to_string(i)
@@ -176,7 +182,7 @@ begin
           '1',
           (
             BASE_ERROR_MESSAGE
-            & ": 'tkeep' check at packet_idx="
+            & "'tkeep' check at packet_idx="
             & to_string(num_packets_checked)
             & ", byte_idx="
             & to_string(i)
@@ -191,7 +197,7 @@ begin
           get(ref_data, i),
           (
             BASE_ERROR_MESSAGE
-            & ": 'tdata' check at packet_idx="
+            & "'tdata' check at packet_idx="
             & to_string(num_packets_checked)
             & ", byte_idx="
             & to_string(i)
@@ -219,11 +225,11 @@ begin
       -- byte lanes at the top shall be nulled out.
       for i in k + 1 to KW - 1 loop
         check_equal(
-          s_axis.tkeep(k),
+          s_axis.tkeep(i),
           '0',
           (
             BASE_ERROR_MESSAGE
-            & ": 'tkeep' check at packet_idx="
+            & "'tkeep' check at packet_idx="
             & to_string(num_packets_checked)
             & ", byte_idx="
             & to_string(i)
@@ -249,9 +255,10 @@ begin
   gen_check_tuser : if UW > 0 generate
   begin
 
-    assert G_REF_USER_QUEUE /= null_queue report "Must set tuser reference queue";
+    assert G_REF_USER_QUEUE /= null_queue 
+      report "Must set tuser reference queue";
 
-    -- ---------------------------------------------------------------------------
+    -- -------------------------------------------------------------------------
     prc_check_tuser : process
       variable user_packet : integer_array_t := null_integer_array;
       variable packet_length_bytes : positive := 1;
@@ -321,7 +328,14 @@ begin
   port map (
     clk => clk,
     --
-    mon_axis => s_axis
+    mon_axis => mon_axis
   );
+
+  mon_axis.tready <= s_axis.tready;
+  mon_axis.tvalid <= s_axis.tvalid;
+  mon_axis.tlast  <= s_axis.tlast ;
+  mon_axis.tkeep  <= s_axis.tkeep ;
+  mon_axis.tdata  <= s_axis.tdata ;
+  mon_axis.tuser  <= s_axis.tuser;
 
 end architecture;

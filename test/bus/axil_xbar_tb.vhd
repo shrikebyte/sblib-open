@@ -159,7 +159,7 @@ begin
   -- ---------------------------------------------------------------------------
   gen_masters : for i in 0 to NUM_MASTERS - 1 generate
 
-    u_axil_bfm : entity work.axil_bfm
+    u_axil_bfm : entity work.bfm_axil_man
     generic map (
       G_BUS_HANDLE => AXIM(i)
     )

@@ -166,7 +166,7 @@ begin
       -- Random s1 user packet
       random_integer_array (
         rnd           => rnd,
-        integer_array => s1_data,
+        integer_array => s1_user,
         width         => S1_PACKET_LENGTH_BYTES,
         bits_per_word => UBW,
         is_signed     => false
@@ -174,12 +174,12 @@ begin
 
       -- Reference user packet
       for i in 0 to S0_PACKET_LENGTH_BYTES - 1 loop
-        append(m_data, get(s0_user, i));
+        append(m_user, get(s0_user, i));
       end loop;
 
       if merge_enable then
         for i in 0 to S1_PACKET_LENGTH_BYTES - 1 loop
-          append(m_data, get(s1_user, i));
+          append(m_user, get(s1_user, i));
         end loop;
       end if;
 
