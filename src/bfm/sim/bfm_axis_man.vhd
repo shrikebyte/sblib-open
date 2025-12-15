@@ -48,10 +48,15 @@ library ieee;
 use ieee.numeric_std.all;
 use ieee.std_logic_1164.all;
 
+library osvvm;
+use osvvm.RandomPkg.RandomPType;
+
 library vunit_lib;
 use vunit_lib.check_pkg.all;
 use vunit_lib.integer_array_pkg.all;
 use vunit_lib.queue_pkg.all;
+use vunit_lib.run_pkg.all;
+use vunit_lib.run_types_pkg.all;
 
 use work.util_pkg.all;
 use work.axis_pkg.all;
@@ -67,6 +72,10 @@ entity bfm_axis_man is
     -- Must be the same length as data queue.
     -- The integer arrays will be deallocated after this BFM is done with them.
     G_USER_QUEUE : queue_t := null_queue;
+    -- If true - Generate random values for tkeep bits for each beat.
+    -- If false - Generate a packed stream, where every beat has all tkeep bits
+    -- set, expect for tlast, which will pack tkeep bits from low to high.
+    G_SPARSE_STREAM : boolean := false;
     -- Assign non-zero to randomly insert jitter/stalling in the data stream.
     G_STALL_CONFIG : stall_configuration_t := zero_stall_configuration;
     -- Suffix for error log messages. Can be used to differentiate between multiple instances.
@@ -103,7 +112,8 @@ architecture sim of bfm_axis_man is
   signal int_axis_tkeep : std_ulogic_vector(m_axis.tkeep'range) := 
     (others => DRIVE_INVALID_VALUE);
   signal int_axis_tlast : std_ulogic := DRIVE_INVALID_VALUE;
-
+  signal int_axis_tuser : std_ulogic_vector(m_axis.tuser'range) := 
+        (others => DRIVE_INVALID_VALUE);
   signal data_is_valid : std_ulogic := '0';
 
 begin
@@ -121,51 +131,91 @@ begin
   -- ---------------------------------------------------------------------------
   prc_tdata_main : process
     variable data_packet : integer_array_t := null_integer_array;
+    variable user_packet : integer_array_t := null_integer_array;
     variable packet_length_bytes : positive := 1;
+    variable user_packet_length_bytes : positive := 1;
     variable data_value : natural := 0;
+    variable user_value : natural := 0;
+    variable i : natural := 0;
     variable k : natural range 0 to KW - 1 := 0;
     variable is_last_byte : boolean := false;
+    variable byte_is_valid : std_ulogic;
+    variable seed : string_seed_t;
+    variable rnd : RandomPType;
   begin
-    while is_empty(G_DATA_QUEUE) loop
-      wait until rising_edge(clk);
+
+    -- Use salt so that parallel instances of this entity get unique random
+    -- sequences.
+    get_seed(seed, salt=>bfm_axis_man'path_name);
+    rnd.InitSeed(seed);
+
+    loop
+
+      i := 0;
+      k := 0;
+
+      while is_empty(G_DATA_QUEUE) loop
+        wait until rising_edge(clk);
+      end loop;
+
+      data_packet := pop_ref(G_DATA_QUEUE);
+      user_packet := pop_ref(G_USER_QUEUE);
+      packet_length_bytes := length(data_packet);
+      user_packet_length_bytes := length(user_packet);
+
+      assert packet_length_bytes = user_packet_length_bytes 
+        report BASE_ERROR_MESSAGE &
+        "Length mismatch between data packet and user packet.";
+
+      data_is_valid <= '1';
+
+      while i < packet_length_bytes loop
+
+        if G_SPARSE_STREAM then
+          byte_is_valid := '1' when rnd.RandInt(0, 1) = 1 else '0';
+        else
+          byte_is_valid := '1';
+        end if;
+        int_axis_tkeep(k) <= byte_is_valid;
+
+        if byte_is_valid then
+          data_value := get(data_packet, i);
+          int_axis_tdata((k + 1) * DBW - 1 downto k * DBW) <=
+            std_ulogic_vector(to_unsigned(data_value, DBW));
+
+          user_value := get(user_packet, i);
+          int_axis_tuser((k + 1) * UBW - 1 downto k * UBW) <=
+            std_ulogic_vector(to_unsigned(user_value, UBW));
+        end if;
+
+        is_last_byte := (i = (packet_length_bytes - 1)) and byte_is_valid;
+
+        if (k = (KW - 1)) or is_last_byte then
+
+          int_axis_tlast <= to_sl(is_last_byte);
+
+          wait until m_axis.tready and m_axis.tvalid and rising_edge(clk);
+
+          -- Default for next beat. We will fill in the byte lanes that are used.
+          int_axis_tkeep <= (others => '0');
+          int_axis_tdata <= (others => DRIVE_INVALID_VALUE);
+        end if;
+
+        k := (k + 1) mod KW;
+        i := i + to_int(byte_is_valid);
+      end loop;
+
+      -- Deallocate after we are done with the data.
+      deallocate(data_packet);
+      deallocate(user_packet);
+
+      -- Default: Signal "not valid" to handshake BFM before next packet.
+      -- If queue is not empty, it will instantly be raised again (no bubble cycle).
+      data_is_valid <= '0';
+
+      num_packets_sent <= num_packets_sent + 1;
+
     end loop;
-
-    data_packet := pop_ref(G_DATA_QUEUE);
-    packet_length_bytes := length(data_packet);
-
-    data_is_valid <= '1';
-
-    for i in 0 to packet_length_bytes - 1 loop
-      k := i mod KW;
-
-      int_axis_tkeep(k) <= '1';
-
-      data_value := get(data_packet, i);
-      int_axis_tdata((k + 1) * DBW - 1 downto k * DBW) <=
-        std_ulogic_vector(to_unsigned(data_value, DBW));
-
-      is_last_byte := i = packet_length_bytes - 1;
-
-      if (k = (KW - 1)) or is_last_byte then
-
-        int_axis_tlast <= to_sl(is_last_byte);
-
-        wait until m_axis.tready and m_axis.tvalid and rising_edge(clk);
-
-        -- Default for next beat. We will fill in the byte lanes that are used.
-        int_axis_tkeep <= (others => '0');
-        int_axis_tdata <= (others => DRIVE_INVALID_VALUE);
-      end if;
-    end loop;
-
-    -- Deallocate after we are done with the data.
-    deallocate(data_packet);
-
-    -- Default: Signal "not valid" to handshake BFM before next packet.
-    -- If queue is not empty, it will instantly be raised again (no bubble cycle).
-    data_is_valid <= '0';
-
-    num_packets_sent <= num_packets_sent + 1;
   end process;
 
 
@@ -189,77 +239,14 @@ begin
     if m_axis.tvalid then
       m_axis.tlast <= int_axis_tlast;
       m_axis.tdata <= int_axis_tdata;
+      m_axis.tuser <= int_axis_tuser;
       m_axis.tkeep <= int_axis_tkeep;
     else
       m_axis.tlast <= DRIVE_INVALID_VALUE;
       m_axis.tdata <= (others => DRIVE_INVALID_VALUE);
+      m_axis.tuser <= (others => DRIVE_INVALID_VALUE);
       m_axis.tkeep <= (others => DRIVE_INVALID_VALUE);
     end if;
   end process;
-
-
-  -- ---------------------------------------------------------------------------
-  gen_tuser_signalling : if UW > 0 generate
-    signal int_axis_tuser : std_ulogic_vector(m_axis.tuser'range) := 
-      (others => DRIVE_INVALID_VALUE);
-  begin
-
-    assert G_USER_QUEUE /= null_queue report BASE_ERROR_MESSAGE &
-      "Must set user queue.";
-
-    -- -------------------------------------------------------------------------
-    prc_tuser_main : process
-      variable user_packet : integer_array_t := null_integer_array;
-      variable packet_length_bytes : positive := 1;
-      variable user_value : natural := 0;
-      variable k : natural range 0 to KW - 1 := 0;
-      variable is_last_byte : boolean := false;
-    begin
-      while is_empty(G_USER_QUEUE) loop
-        wait until rising_edge(clk);
-      end loop;
-
-      user_packet := pop_ref(G_USER_QUEUE);
-      packet_length_bytes := length(user_packet);
-
-      for i in 0 to packet_length_bytes - 1 loop
-        k := i mod KW;
-
-        user_value := get(user_packet, i);
-        int_axis_tuser((k + 1) * UBW - 1 downto k * UBW) <=
-          std_ulogic_vector(to_unsigned(user_value, UBW)
-        );
-
-        is_last_byte := i = packet_length_bytes - 1;
-
-        if k = KW - 1 or is_last_byte then
-          wait until m_axis.tready and m_axis.tvalid and rising_edge(clk);
-
-          if m_axis.tlast then
-            check_equal(
-              i,
-              packet_length_bytes - 1,
-              BASE_ERROR_MESSAGE &
-              "Length mismatch between data packet and user packet"
-            );
-          end if;
-        end if;
-      end loop;
-
-      -- Deallocate after we are done with the data.
-      deallocate(user_packet);
-    end process;
-
-
-    -- -------------------------------------------------------------------------
-    prc_assign_tuser_invalid : process(all) begin
-      if m_axis.tvalid then
-        m_axis.tuser <= int_axis_tuser;
-      else
-        m_axis.tuser <= (others => DRIVE_INVALID_VALUE);
-      end if;
-    end process;
-
-  end generate;
 
 end architecture;

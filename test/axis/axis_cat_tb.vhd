@@ -1,9 +1,9 @@
 --##############################################################################
---# File : axis_merge_tb.vhd
+--# File : axis_cat_tb.vhd
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXIS merge testbench
+--! AXIS concatenate testbench
 --##############################################################################
 
 library ieee;
@@ -22,24 +22,21 @@ use work.util_pkg.all;
 use work.axis_pkg.all;
 use work.bfm_pkg.all;
 
-entity axis_merge_tb is
+entity axis_cat_tb is
   generic (
     RUNNER_CFG      : string;
     G_ENABLE_JITTER : boolean := true;
-    G_KW            : integer := 2;
-    G_DW            : integer := 16;
-    G_UW            : integer := 8
   );
 end entity;
 
-architecture tb of axis_merge_tb is
+architecture tb of axis_cat_tb is
 
   -- TB Constants
   constant RESET_TIME : time := 50 ns;
   constant CLK_PERIOD : time := 5 ns;
-  constant KW          : integer  := G_KW;
-  constant DW          : integer  := G_DW;
-  constant UW          : integer  := G_UW;
+  constant KW          : integer  := 4;
+  constant DW          : integer  := 32;
+  constant UW          : integer  := 16;
   constant DBW         : integer  := DW / KW;
   constant UBW         : integer  := UW / KW;
 
@@ -50,7 +47,7 @@ architecture tb of axis_merge_tb is
   signal srstn : std_ulogic := '0';
 
   -- DUT Signals
-  signal merge_enable : std_ulogic := '0';
+  signal enable : std_ulogic := '1';
 
   signal s0_axis : axis_t (
     tdata(DW - 1 downto 0),
@@ -95,10 +92,10 @@ begin
     variable rnd : randomptype;
     variable num_tests : natural := 0;
 
-    procedure send_random(constant merge_enable : boolean) is
+    procedure send_random(constant enable : boolean) is
 
-      constant S0_PACKET_LENGTH_BYTES : natural := rnd.Uniform(1, 3 * G_KW);
-      constant S1_PACKET_LENGTH_BYTES : natural := rnd.Uniform(1, 3 * G_KW);
+      constant S0_PACKET_LENGTH_BYTES : natural := rnd.Uniform(1, 3 * KW);
+      constant S1_PACKET_LENGTH_BYTES : natural := rnd.Uniform(1, 3 * KW);
 
       variable s0_data : integer_array_t := null_integer_array;
       variable s1_data : integer_array_t := null_integer_array;
@@ -142,7 +139,7 @@ begin
         append(m_data, get(s0_data, i));
       end loop;
 
-      if merge_enable then
+      if enable then
         for i in 0 to S1_PACKET_LENGTH_BYTES - 1 loop
           append(m_data, get(s1_data, i));
         end loop;
@@ -177,7 +174,7 @@ begin
         append(m_user, get(s0_user, i));
       end loop;
 
-      if merge_enable then
+      if enable then
         for i in 0 to S1_PACKET_LENGTH_BYTES - 1 loop
           append(m_user, get(s1_user, i));
         end loop;
@@ -203,18 +200,18 @@ begin
     wait until rising_edge(clk);
 
     if run("test_random_data_merge") then
-      merge_enable <= '1';
+      enable <= '1';
       wait until rising_edge(clk);
       for test_idx in 0 to 50 loop
         send_random(true);
       end loop;
 
-    elsif run("test_random_data_passthru") then
-      merge_enable <= '0';
-      wait until rising_edge(clk);
-      for test_idx in 0 to 50 loop
-        send_random(false);
-      end loop;
+    -- elsif run("test_random_data_passthru") then
+    --   enable <= '0';
+    --   wait until rising_edge(clk);
+    --   for test_idx in 0 to 50 loop
+    --     send_random(false);
+    --   end loop;
     end if;
 
     wait until num_packets_checked = num_tests and rising_edge(clk);
@@ -233,14 +230,18 @@ begin
   clk <= not clk after CLK_PERIOD / 2;
 
   -- ---------------------------------------------------------------------------
-  u_axis_merge : entity work.axis_merge
+  u_axis_merge : entity work.axis_cat
+  generic map (
+    G_DATA_PIPE   => true,
+    G_PACK_OUTPUT => true
+  )
   port map (
-    clk     => clk,
-    srst    => srst,
-    merge_enable => merge_enable,
-    s0_axis => s0_axis,
-    s1_axis => s1_axis,
-    m_axis  => m_axis
+    clk       => clk,
+    srst      => srst,
+    --enable    => enable,
+    s_axis(0) => s0_axis,
+    s_axis(1) => s1_axis,
+    m_axis    => m_axis
   );
 
   u_bfm_axis_man_0 : entity work.bfm_axis_man

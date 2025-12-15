@@ -49,10 +49,10 @@ entity bfm_handshake_man is
   );
   port (
     clk : in std_ulogic;
-    --# {{}}
+    --
     -- Set by testbench when there is data available.
     data_is_valid : in std_ulogic := '1';
-    --# {{}}
+    --
     ready : in std_ulogic := '1';
     valid : out std_ulogic := '0'
   );
@@ -67,15 +67,16 @@ begin
   valid <= data_is_valid and let_data_through;
 
 
-  ------------------------------------------------------------------------------
-  toggle_stall_gen : if G_STALL_CONFIG.stall_probability > 0.0 generate
+  -- ---------------------------------------------------------------------------
+  gen_toggle_stall : if G_STALL_CONFIG.stall_probability > 0.0 generate
 
-    ------------------------------------------------------------------------------
-    toggle_stall : process
+    -- -------------------------------------------------------------------------
+    prc_toggle_stall : process
       variable seed : string_seed_t;
       variable rnd : RandomPType;
     begin
-      -- Use salt so that parallel instances of this entity get unique random sequences.
+      -- Use salt so that parallel instances of this entity get unique random
+      -- sequences.
       get_seed(seed, salt=>bfm_handshake_man'path_name);
       rnd.InitSeed(seed);
 

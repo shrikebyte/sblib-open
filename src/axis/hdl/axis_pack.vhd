@@ -37,8 +37,6 @@ end entity;
 
 architecture rtl of axis_pack is
 
-  -- ---------------------------------------------------------------------------
-  -- Data width, keep width, user width, data byte width, and user byte width
   constant DW : integer := m_axis.tdata'length;
   constant KW : integer := m_axis.tkeep'length;
   constant UW : integer := m_axis.tuser'length;
@@ -56,6 +54,12 @@ architecture rtl of axis_pack is
   signal resid_tkeep : std_ulogic_vector(m_axis.tkeep'range);
   signal resid_tdata : std_ulogic_vector(m_axis.tdata'range);
   signal resid_tuser : std_ulogic_vector(m_axis.tuser'range);
+
+  signal int_axis : axis_t (
+    tdata(m_axis.tdata'range),
+    tkeep(m_axis.tkeep'range),
+    tuser(m_axis.tuser'range)
+  );
 
   -- Represents packed data type, comprising of 2 back-to-back beats with
   -- some tkeep bits unset in one or both beats.
@@ -80,7 +84,8 @@ architecture rtl of axis_pack is
   signal pack : pack_t;
 
   -- ---------------------------------------------------------------------------
-  -- Pack 2 sparse beats into one packed beat and one residual beat
+  -- Pack 2 sparse beats into one packed beat and one residual beat.
+  -- This is essentially a fancy barrel-shifter.
   impure function calc_pack (
     lo_tkeep : std_ulogic_vector(KW-1 downto 0);
     lo_tdata : std_ulogic_vector(DW-1 downto 0);
@@ -131,111 +136,128 @@ architecture rtl of axis_pack is
     return result;
   end function;
 
+  signal packed_all_are_valid : std_ulogic;
+  signal packed_at_least_one_is_valid : std_ulogic;
+  signal resid_at_least_one_is_valid : std_ulogic;
+
 begin
 
   -- ---------------------------------------------------------------------------
-  gen_support_null_tlast : if G_SUPPORT_NULL_TLAST generate
+  oe <= int_axis.tready or not int_axis.tvalid;
+  s_axis.tready <= oe and (state = ST_PACK);
+  packed_all_are_valid <= and pack.packed_tkeep;
+  packed_at_least_one_is_valid <= or pack.packed_tkeep;
+  resid_at_least_one_is_valid <= or pack.resid_tkeep;
 
-    signal int_axis : axis_t (
-      tdata(m_axis.tdata'range),
-      tkeep(m_axis.tkeep'range),
-      tuser(m_axis.tuser'range)
-    );
+  pack <= calc_pack(
+    lo_tkeep => resid_tkeep, 
+    lo_tdata => resid_tdata, 
+    lo_tuser => resid_tuser, 
+    hi_tkeep => s_axis.tkeep, 
+    hi_tdata => s_axis.tdata, 
+    hi_tuser => s_axis.tuser
+  );
 
-  begin
+  -- ---------------------------------------------------------------------------
+  prc_fsm : process (clk) begin
+    if rising_edge(clk) then
 
-    oe <= int_axis.tready or not int_axis.tvalid;
-    s_axis.tready <= oe and (state = ST_PACK);
-    pack <= calc_pack(
-      lo_tkeep => resid_tkeep, 
-      lo_tdata => resid_tdata, 
-      lo_tuser => resid_tuser, 
-      hi_tkeep => s_axis.tkeep, 
-      hi_tdata => s_axis.tdata, 
-      hi_tuser => s_axis.tuser
-    );
+      -- By default, clear m_valid if m_ready. The FSM might override this
+      --  if it has new data to send.
+      if int_axis.tready then
+        int_axis.tvalid <= '0';
+      end if;
 
-    -- ---------------------------------------------------------------------------
-    prc_fsm : process (clk) begin
-      if rising_edge(clk) then
+      case state is
 
-        -- By default, clear m_valid if m_ready. The FSM might override this
-        --  if it has new data to send.
-        if int_axis.tready then
-          int_axis.tvalid <= '0';
-        end if;
+        -- ---------------------------------------------------------------------
+        when ST_PACK =>
+          if s_axis.tvalid and s_axis.tready then
+            -- If new input beat
 
-        case state is
+            int_axis.tkeep <= pack.packed_tkeep;
+            int_axis.tdata <= pack.packed_tdata;
+            int_axis.tuser <= pack.packed_tuser;
 
-          -- ---------------------------------------------------------------------
-          when ST_PACK =>
-            if s_axis.tvalid and s_axis.tready then
-              -- If new input beat
+            if packed_all_are_valid then
+              -- If a new packed beat is ready, then shift out the packed data
+              -- to be transmitted on the next cycle and shift in the residual
+              -- data to be transmitted the next time we have a new full output
+              -- beat.
+              resid_tkeep  <= pack.resid_tkeep;
+              resid_tdata  <= pack.resid_tdata;
+              resid_tuser  <= pack.resid_tuser;
+            else
+              -- Otherwise, store the partially-packed output data in the
+              -- residual buffer.
+              resid_tkeep  <= pack.packed_tkeep;
+              resid_tdata  <= pack.packed_tdata;
+              resid_tuser  <= pack.packed_tuser;
+            end if;
 
-              resid_tkeep    <= pack.resid_tkeep;
-              resid_tdata    <= pack.resid_tdata;
-              resid_tuser    <= pack.resid_tuser;
-              int_axis.tkeep <= pack.packed_tkeep;
-              int_axis.tdata <= pack.packed_tdata;
-              int_axis.tuser <= pack.packed_tuser;
-              
+            if s_axis.tlast then
 
-              if s_axis.tlast then
-
+              if G_SUPPORT_NULL_TLAST then
                 -- If last input beat and ANY of the packed output beats are
                 -- valid, then output is valid.
-                int_axis.tvalid <= or pack.packed_tkeep;
-
-                if or pack.resid_tkeep then
-                  -- If there are ANY residual bytes, we need to transmit
-                  -- one additional beat to finish the packet.
-                  int_axis.tlast <= '0';
-                  state          <= ST_LAST;
-                else
-                  -- Otherwise, if there are no residual bytes left at this point,
-                  -- we're done.
-                  int_axis.tlast <= '1';
-                  resid_tkeep    <= (others => '0');
-                end if;
-
+                int_axis.tvalid <= packed_at_least_one_is_valid;
               else
-
-                -- If normal input beat and ALL of the packed output beats are
-                -- valid, then output is valid.
-                int_axis.tvalid <= and pack.packed_tkeep;
-                int_axis.tlast  <= '0';
+                -- In this mode, the user guarantees the input stream will never
+                -- have a null tlast beat, so we can save a bit of logic here.
+                int_axis.tvalid <= '1';
               end if;
 
+              if resid_at_least_one_is_valid then
+                -- If there are ANY residual bytes, we need to transmit
+                -- one additional beat to finish the packet.
+                int_axis.tlast <= '0';
+                state          <= ST_LAST;
+              else
+                -- Otherwise, if there are no residual bytes left at this point,
+                -- we're done.
+                int_axis.tlast <= '1';
+                resid_tkeep    <= (others => '0');
+              end if;
+
+            else
+
+              -- If normal input beat and ALL of the packed output beats are
+              -- valid, then output is valid.
+              int_axis.tvalid <= packed_all_are_valid;
+              int_axis.tlast  <= '0';
             end if;
 
-          -- ---------------------------------------------------------------------
-          when ST_LAST =>
-            if oe then
-              -- If output is ready
-              int_axis.tvalid <= '1';
-              int_axis.tdata  <= resid_tdata;
-              int_axis.tuser  <= resid_tuser;
-              int_axis.tkeep  <= resid_tkeep;
-              int_axis.tlast  <= '1';
-              resid_tkeep   <= (others => '0');
-              state         <= ST_PACK;
-            end if;
+          end if;
 
-          when others =>
-            null;
-        end case;
+        -- ---------------------------------------------------------------------
+        when ST_LAST =>
+          if oe then
+            -- If output is ready
+            int_axis.tvalid <= '1';
+            int_axis.tdata  <= resid_tdata;
+            int_axis.tuser  <= resid_tuser;
+            int_axis.tkeep  <= resid_tkeep;
+            int_axis.tlast  <= '1';
+            resid_tkeep     <= (others => '0');
+            state           <= ST_PACK;
+          end if;
 
-        if srst then
-          int_axis.tvalid  <= '0';
-          resid_tkeep    <= (others => '0');
-          state          <= ST_PACK;
-        end if;
+        when others =>
+          null;
+      end case;
+
+      if srst then
+        int_axis.tvalid  <= '0';
+        resid_tkeep      <= (others => '0');
+        state            <= ST_PACK;
       end if;
-    end process;
+    end if;
+  end process;
 
-    
-    -- -------------------------------------------------------------------------
-    -- Output register
+
+  -- ---------------------------------------------------------------------------
+  gen_output_reg : if G_SUPPORT_NULL_TLAST generate
+
     int_axis.tready <= m_axis.tready or not m_axis.tvalid;
 
     prc_output_reg : process (clk) begin
@@ -254,8 +276,10 @@ begin
           -- This extra output register is required to support null tlast beats
           -- because we need to be able to look ahead in time by one
           -- transaction.
-          if s_axis.tvalid and s_axis.tready and s_axis.tlast and (nor s_axis.tkeep) then
-            m_axis.tlast    <= '1';
+          if s_axis.tvalid and s_axis.tready and s_axis.tlast and 
+             (nor s_axis.tkeep)
+          then
+            m_axis.tlast <= '1';
           else 
             m_axis.tlast <= int_axis.tlast; 
           end if;
@@ -270,97 +294,15 @@ begin
       end if;
     end process;
 
-
-  -- ---------------------------------------------------------------------------
   else generate
-  begin
 
-    oe <= m_axis.tready or not m_axis.tvalid;
-    s_axis.tready <= oe and (state = ST_PACK);
-    pack <= calc_pack(
-      lo_tkeep => resid_tkeep, 
-      lo_tdata => resid_tdata, 
-      lo_tuser => resid_tuser, 
-      hi_tkeep => s_axis.tkeep, 
-      hi_tdata => s_axis.tdata, 
-      hi_tuser => s_axis.tuser
-    );
+    int_axis.tready <= m_axis.tready;
+    m_axis.tvalid   <= int_axis.tvalid; 
+    m_axis.tdata    <= int_axis.tdata; 
+    m_axis.tkeep    <= int_axis.tkeep; 
+    m_axis.tuser    <= int_axis.tuser;
+    m_axis.tlast    <= int_axis.tlast; 
 
-    -- ---------------------------------------------------------------------------
-    prc_fsm : process (clk) begin
-      if rising_edge(clk) then
-
-        -- By default, clear m_valid if m_ready. The FSM might override this
-        --  if it has new data to send.
-        if m_axis.tready then
-          m_axis.tvalid <= '0';
-        end if;
-
-        case state is
-
-          -- ---------------------------------------------------------------------
-          when ST_PACK =>
-            if s_axis.tvalid and s_axis.tready then
-              -- If new input beat
-
-              resid_tkeep    <= pack.resid_tkeep;
-              resid_tdata    <= pack.resid_tdata;
-              resid_tuser    <= pack.resid_tuser;
-              m_axis.tkeep <= pack.packed_tkeep;
-              m_axis.tdata <= pack.packed_tdata;
-              m_axis.tuser <= pack.packed_tuser;
-
-              if s_axis.tlast then
-
-                m_axis.tvalid <= '1';
-
-                if or pack.resid_tkeep then
-                  -- If there are ANY residual bytes, we need to transmit
-                  -- one additional beat to finish the packet.
-                  m_axis.tlast <= '0';
-                  state        <= ST_LAST;
-                else
-                  -- Otherwise, if there are no residual bytes left at this point,
-                  -- we're done.
-                  m_axis.tlast  <= '1';
-                  resid_tkeep   <= (others => '0');
-                end if;
-
-              else
-
-                -- If normal input beat and ALL of the packed output beats are
-                -- valid, then output is valid.
-                m_axis.tvalid <= and pack.packed_tkeep;
-                m_axis.tlast  <= '0';
-              end if;
-
-            end if;
-
-          -- ---------------------------------------------------------------------
-          when ST_LAST =>
-            if oe then
-              -- If output is ready
-              m_axis.tvalid <= '1';
-              m_axis.tdata  <= resid_tdata;
-              m_axis.tkeep  <= resid_tkeep;
-              m_axis.tuser  <= resid_tuser;
-              m_axis.tlast  <= '1';
-              resid_tkeep   <= (others => '0');
-              state         <= ST_PACK;
-            end if;
-
-          when others =>
-            null;
-        end case;
-
-        if srst then
-          m_axis.tvalid  <= '0';
-          resid_tkeep    <= (others => '0');
-          state          <= ST_PACK;
-        end if;
-      end if;
-    end process;
-    
   end generate;
 
 end architecture;

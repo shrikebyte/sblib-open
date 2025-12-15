@@ -1,10 +1,9 @@
 -- --##############################################################################
--- --# File : axis_split.vhd
+-- --# File : axis_slice.vhd
 -- --# Auth : David Gussler
 -- --# Lang : VHDL'19
 -- --# ============================================================================
--- --! Split one packet into 2.
--- --! Does not support tuser (for now).
+-- --! Slice one input packet into several output packets
 -- --##############################################################################
 
 -- library ieee;
@@ -13,50 +12,67 @@
 -- use work.util_pkg.all;
 -- use work.axis_pkg.all;
 
--- entity axis_split is
+-- entity axis_slice is
+--   generic (
+--     G_PACK_OUTPUT : boolean := true;
+--   );
 --   port (
 --     clk    : in    std_ulogic;
 --     srst   : in    std_ulogic;
---     --! Input packet
+--     --
 --     s_axis : view s_axis_v;
---     --! First output packet. Striped from start of input packet
+--     --
 --     m0_axis : view m_axis_v;
---     --! Second output packet. Remaining bytes from input packet
 --     m1_axis : view m_axis_v;
 --     --! Enable split operation. Otherwise, this module is just a passthru.
---     split_enable : in std_ulogic;
+--     enable : in std_ulogic;
 --     --! Number of bytes from the start of the input to send to the first output
 --     --! packet. The remaining input bytes, until tlast, will be sent to the
 --     --! second output packet. Note that this does not necessarily have to be
 --     --! 8-bit bytes. For example, if data width is 32 and keep width is 2, then
 --     --! byte width would be 16.
---     split_bytes  : in u_unsigned;
+--     slice_bytes  : in u_unsigned;
 --     --! Pulses if the length of the input packet was shorter than split_bytes.
 --     sts_err_runt : out std_ulogic;
 --   );
 -- end entity;
 
--- architecture rtl of axis_split is
+-- architecture rtl of axis_slice is
 
---   -- Data width, keep width, and byte width
---   constant DW : integer := s_axis.tdata'length;
 --   constant KW : integer := s_axis.tkeep'length;
---   constant BW : integer := DW / KW;
+--   constant DW : integer := s_axis.tdata'length;
+--   constant UW : integer := s_axis.tuser'length;
+--   constant DBW : integer := DW / KW;
+--   constant UBW : integer := UW / KW;
 
---   type state_t is (ST_IDLE, ST_M0, ST_PACK, ST_M1, ST_LAST, ST_PASSTHRU);
+--   type state_t is (ST_IDLE, ST_TX0, ST_FIRST_PARTIAL, ST_TX1, ST_PASSTHRU);
        
 --   signal state : state_t;
 
 --   signal m0_oe : std_ulogic;
 --   signal m1_oe : std_ulogic;
 
---   signal split_bytes_cnt : u_unsigned(split_bytes'range);
+--   signal slice_bytes_cnt : u_unsigned(slice_bytes'range);
+
+--   signal int0_axis : axis_t (
+--     tdata(s_axis.tdata'range),
+--     tkeep(s_axis.tkeep'range),
+--     tuser(s_axis.tuser'range)
+--   );
+
+--   signal int1_axis : axis_t (
+--     tdata(s_axis.tdata'range),
+--     tkeep(s_axis.tkeep'range),
+--     tuser(s_axis.tuser'range)
+--   );
+
+--   signal input_num_valid_bytes : natural range 0 to s_axis.tkeep'length;
 
 -- begin
 
+--   input_num_valid_bytes <= cnt_ones(s_axis.tkeep);
+
 --   -- ---------------------------------------------------------------------------
---   m0_axis.tuser <= (others => '0');
---   m1_axis.tuser <= (others => '0');
 
 --   m0_oe <= m0_axis.tready or not m0_axis.tvalid;
 --   m1_oe <= m1_axis.tready or not m1_axis.tvalid;
@@ -65,7 +81,7 @@
 --     case state is
 --       when ST_IDLE =>
 --         s_axis.tready <= '0';
---       when ST_M0 | ST_PASSTHRU =>
+--       when ST_TX | ST_PASSTHRU =>
 --         s_axis.tready <= m0_oe;
 --       when ST_M1 =>
 --         s_axis.tready <= m1_oe;
@@ -81,45 +97,42 @@
 
 --       -- By default, clear mvalid if mready. The FSM might override this if it
 --       -- has new data to send.
---       if m0_axis.tready then
---         m0_axis.tvalid <= '0';
---       end if;
-
---       if m1_axis.tready then
---         m1_axis.tvalid <= '0';
+--       if int0_axis.tready then
+--         int0_axis.tvalid <= '0';
 --       end if;
 
 --       case state is
 --         -- ---------------------------------------------------------------------
 --         when ST_IDLE =>
 --           if s_axis.tvalid then
---             if split_enable then
---               split_bytes_cnt <= split_bytes;
---               state           <= ST_M0;
+--             if enable then
+--               slice_bytes_cnt <= slice_bytes;
+--               state           <= ST_TX0;
+--               sel
 --             else
 --               state <= ST_PASSTHRU;
 --             end if;
 --           end if;
 
 --         -- ---------------------------------------------------------------------
---         when ST_M0 =>
+--         when ST_TX0 =>
 --           if s_axis.tvalid and s_axis.tready then
---             if split_bytes_cnt > KW then
---               m0_axis.tvalid  <= '1';
---               m0_axis.tdata   <= s_axis.tdata;
---               m0_axis.tkeep   <= s_axis.tkeep;
---               split_bytes_cnt <= split_bytes_cnt - 1;
+--             if slice_bytes_cnt > KW then
+--               int0_axis.tvalid  <= '1';
+--               int0_axis.tdata   <= s_axis.tdata;
+--               int0_axis.tkeep   <= s_axis.tkeep;
+--               slice_bytes_cnt   <= slice_bytes_cnt - input_num_valid_bytes;
 --             else 
---               m0_axis.tvalid  <= '1';
---               m0_axis.tdata   <= s_axis.tdata;
---               m0_axis.tkeep(split_bytes_cnt)   <= s_axis.tkeep;
+--               int0_axis.tvalid  <= '1';
+--               int0_axis.tdata   <= s_axis.tdata;
+--               int0_axis.tkeep(slice_bytes_cnt)   <= s_axis.tkeep;
 
 --             if s_axis.tlast then
---               m0_axis.tlast  <= '1';
+--               int0_axis.tlast  <= '1';
 --               sts_err_runt   <= '1';
 --               state          <= ST_IDLE;
 --             else
---               m0_axis.tlast  <= '0';
+--               int0_axis.tlast  <= '0';
 
 --               if 
 
@@ -130,7 +143,7 @@
 --           end if;
 
 --         -- ---------------------------------------------------------------------
---         when ST_PACK =>
+--         when ST_FIRST_PARTIAL =>
 --           if s1_axis.tvalid and s1_axis.tready then
 
 --             m_axis.tvalid <= '1';
@@ -159,45 +172,18 @@
 --           end if;
 
 --         -- ---------------------------------------------------------------------
---         when ST_LAST =>
---           if oe then
---             m_axis.tvalid <= '1';
---             m_axis.tdata  <= resid_tdata;
---             m_axis.tkeep  <= resid_tkeep;
---             m_axis.tlast  <= '1';
---             resid_tkeep   <= (others => '0');
---             state         <= ST_IDLE;
---           end if;
-
---         -- ---------------------------------------------------------------------
---         when ST_FORWARD_S1 =>
---           if s1_axis.tvalid and s1_axis.tready then
-
---             m_axis.tvalid <= '1';
---             m_axis.tdata  <= s1_axis.tdata;
---             m_axis.tkeep  <= s1_axis.tkeep;
-
---             if s1_axis.tlast then
---               m_axis.tlast  <= '1';
---               state         <= ST_IDLE;
---             else 
---               m_axis.tlast  <= '0';
---             end if;
---           end if;
-
---         -- ---------------------------------------------------------------------
 --         when ST_PASSTHRU =>
 --           if s_axis.tvalid and s_axis.tready then
 
---             m0_axis.tvalid <= '1';
---             m0_axis.tdata  <= s_axis.tdata;
---             m0_axis.tkeep  <= s_axis.tkeep;
+--             int0_axis.tvalid <= '1';
+--             int0_axis.tdata  <= s_axis.tdata;
+--             int0_axis.tkeep  <= s_axis.tkeep;
 
 --             if s_axis.tlast then
---               m0_axis.tlast  <= '1';
+--               int0_axis.tlast  <= '1';
 --               state          <= ST_IDLE;
 --             else 
---               m0_axis.tlast  <= '0';
+--               int0_axis.tlast  <= '0';
 --             end if;
 --           end if;
 
@@ -206,8 +192,7 @@
 --       end case;
 
 --       if srst then
---         m0_axis.tvalid  <= '0';
---         m1_axis.tvalid  <= '0';
+--         int0_axis.tvalid  <= '0';
 --         sts_err_runt    <= '0';
 --         state           <= ST_IDLE;
 --       end if;

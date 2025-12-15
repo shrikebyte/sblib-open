@@ -155,16 +155,3 @@ def add_configs(lib):
             'G_S_UW': s_uw,
         })
 
-    ############################################################################
-    tb = lib.test_bench('axis_merge_tb')
-
-    enable_jitter = [True, False]
-    dw = [32]
-    kw = [4]
-
-    for enable_jitter, dw, kw in product(enable_jitter, dw, kw):
-      sim_utils.named_config(tb, {
-            'G_ENABLE_JITTER': enable_jitter,
-            'G_DW': dw,
-            'G_KW': kw
-        })

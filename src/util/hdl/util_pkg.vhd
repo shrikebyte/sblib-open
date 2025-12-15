@@ -155,6 +155,9 @@ package util_pkg is
 
   type slv_arr_t is array (natural range <>) of std_logic_vector;
 
+  type unsigned_arr_t is array (natural range <>) of u_unsigned;
+  type signed_arr_t is array (natural range <>) of u_signed;
+
   type int_arr_t is array (natural range <>) of integer;
 
   type pos_arr_t is array (natural range <>) of positive;
@@ -209,6 +212,8 @@ package util_pkg is
 
   function to_sl (val : boolean) return std_ulogic;
   function to_sl(val : natural range 0 to 1) return std_ulogic;
+  function to_int(val : std_ulogic) return integer;
+  function to_int(val : boolean) return integer;
   function to_bool(val : std_ulogic) return boolean;
   function to_bool(val : natural range 0 to 1) return boolean;
   function "and" (left : boolean; right: std_ulogic) return boolean;
@@ -399,6 +404,24 @@ package body util_pkg is
       return '1';
     end if;
     return '0';
+  end function;
+
+  function to_int(val : std_ulogic) return integer is
+  begin
+    if val = '1' then
+      return 1;
+    else
+      return 0;
+    end if;
+  end function;
+
+  function to_int(val : boolean) return integer is
+  begin
+    if val = true then
+      return 1;
+    else
+      return 0;
+    end if;
   end function;
 
   function to_bool(val : std_ulogic) return boolean is

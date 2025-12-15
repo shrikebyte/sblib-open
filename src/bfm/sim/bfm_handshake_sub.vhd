@@ -73,15 +73,16 @@ begin
   ready <= data_is_ready and let_data_through;
 
 
-  ------------------------------------------------------------------------------
-  toggle_stall_gen : if G_STALL_CONFIG.stall_probability > 0.0 generate
+  -- ---------------------------------------------------------------------------
+  gen_toggle_stall : if G_STALL_CONFIG.stall_probability > 0.0 generate
 
-    ------------------------------------------------------------------------------
-    toggle_stall : process
+    -- -------------------------------------------------------------------------
+    prc_toggle_stall : process
       variable seed : string_seed_t;
       variable rnd : RandomPType;
     begin
-      -- Use salt so that parallel instances of this entity get unique random sequences.
+      -- Use salt so that parallel instances of this entity get unique random
+      -- sequences.
       get_seed(seed, salt=>bfm_handshake_sub'path_name);
       rnd.InitSeed(seed);
 
