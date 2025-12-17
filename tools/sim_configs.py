@@ -19,7 +19,7 @@ def add_configs(lib):
     stagess = [1, 3]
     ready_pipes = [True, False]
     data_pipes = [True, False]
-    stall_probs = [0, 50]
+    stall_probs = [50]
 
     for stages, ready_pipe, data_pipe, stall_prob in product(stagess, ready_pipes, data_pipes, stall_probs):
       sim_utils.named_config(tb, {
@@ -33,8 +33,8 @@ def add_configs(lib):
     ## FIFO
     tb = lib.test_bench('fifo_tb')
 
-    out_regs = [True, False]
-    stall_probs = [0, 50]
+    out_regs = [False]
+    stall_probs = [50]
 
     for out_reg, stall_prob in product(out_regs, stall_probs):
         sim_utils.named_config(tb, {
@@ -43,19 +43,19 @@ def add_configs(lib):
         })
 
 
-    # ## Async FIFO
-    # tb = lib.test_bench('fifo_async_tb')
+    ## Async FIFO
+    tb = lib.test_bench('fifo_async_tb')
 
-    # out_regs = [True, False]
-    # clk_ratios = [100, 50, 200, 150, 12, 432, 95]
-    # stall_probs = [0, 50]
+    out_regs = [False]
+    clk_ratios = [100, 50, 200, 150, 12, 432, 95]
+    stall_probs = [50]
 
-    # for out_reg, clk_ratio, stall_prob in product(out_regs, clk_ratios, stall_probs):
-    #     sim_utils.named_config(tb, {
-    #         'G_OUT_REG': out_reg,
-    #         'G_CLK_RATIO': clk_ratio,
-    #         'G_AXIS_STALL_PROB': stall_prob,
-    #     })
+    for out_reg, clk_ratio, stall_prob in product(out_regs, clk_ratios, stall_probs):
+        sim_utils.named_config(tb, {
+            'G_OUT_REG': out_reg,
+            'G_CLK_RATIO': clk_ratio,
+            'G_AXIS_STALL_PROB': stall_prob,
+        })
 
 
 
@@ -63,7 +63,7 @@ def add_configs(lib):
     tb = lib.test_bench('cdc_vector_tb')
 
     clk_ratios = [100, 50, 200, 150, 12, 432, 95]
-    stall_probs = [0, 50]
+    stall_probs = [50]
 
     for clk_ratio, stall_prob in product(clk_ratios, stall_probs):
         sim_utils.named_config(tb, {
@@ -154,4 +154,3 @@ def add_configs(lib):
             'G_M_DW': m_dw,
             'G_S_UW': s_uw,
         })
-

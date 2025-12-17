@@ -7,7 +7,6 @@
 --! The `sel` select input can be changed at any time. The mux "locks on" to
 --! a packet when the input channel's tvalid is high at the same time as it's
 --! `sel` is selected. The mux releases a channel after the tlast beat.
---! This can maintain full thruput.
 --##############################################################################
 
 library ieee;

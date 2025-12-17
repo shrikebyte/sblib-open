@@ -29,7 +29,8 @@ entity axis_pack_tb is
     G_KW            : integer := 4;
     G_DW            : integer := 32;
     G_UW            : integer := 32;
-    G_SUPPORT_NULL_TLAST : boolean := true
+    G_SUPPORT_NULL_TLAST : boolean := true;
+    G_PACKED_INPUT_STREAM : boolean := false
   );
 end entity;
 
@@ -173,7 +174,7 @@ begin
     G_DATA_QUEUE    => DATA_QUEUE,
     G_USER_QUEUE    => USER_QUEUE,
     G_STALL_CONFIG  => STALL_CFG,
-    G_PACKED_STREAM => false,
+    G_PACKED_STREAM => G_PACKED_INPUT_STREAM,
     G_NULL_TLAST    => G_SUPPORT_NULL_TLAST
   )
   port map(

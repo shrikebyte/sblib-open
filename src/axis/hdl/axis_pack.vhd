@@ -3,11 +3,11 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! Pack a sparse stream into a packed stream. Removes null bytes. Can accept
+--! Removes nulled out bytes, where tkeep is low. Can accept
 --! any sparse input stream, including beats where all bytes are null.
 --! If tuser is used, it must be byte oriented, meaning tuser width must be
 --! an integer multiple of tkeep width. Tuser bits will be dropped along with
---! the corresponding data if tkeep is nulled.
+--! the corresponding data if tkeep for that byte is nulled.
 --##############################################################################
 
 library ieee;
