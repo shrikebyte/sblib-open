@@ -39,9 +39,10 @@ architecture rtl of axis_pack is
 
   -- Residual tdata and tkeep. Stores leftover bytes that need to be
   -- sent after the current packed beat has been sent.
-  signal resid_tkeep : std_ulogic_vector(m_axis.tkeep'range);
-  signal resid_tdata : std_ulogic_vector(m_axis.tdata'range);
-  signal resid_tuser : std_ulogic_vector(m_axis.tuser'range);
+  signal resid_tkeep_reg : std_ulogic_vector(m_axis.tkeep'range);
+  signal resid_tdata_reg : std_ulogic_vector(m_axis.tdata'range);
+  signal resid_tuser_reg : std_ulogic_vector(m_axis.tuser'range);
+
 
   -- Represents packed data type, comprising of 2 back-to-back beats with
   -- some tkeep bits unset in one or both beats.
@@ -54,66 +55,39 @@ architecture rtl of axis_pack is
     resid_tuser  : std_ulogic_vector(UW-1 downto 0);
   end record;
 
-  constant PACK_DEFAULT : pack_t := (
-    packed_tkeep => (others => '0'),
-    packed_tdata => (others => '-'),
-    packed_tuser => (others => '-'),
-    resid_tkeep  => (others => '0'),
-    resid_tdata  => (others => '-'),
-    resid_tuser  => (others => '-')
-  );
-
   signal pack : pack_t;
 
   -- ---------------------------------------------------------------------------
-  -- Pack 2 sparse beats into one packed beat and one residual beat.
-  -- This is essentially a fancy barrel-shifter.
   impure function calc_pack (
-    lo_tkeep : std_ulogic_vector(KW-1 downto 0);
+    lo_count : integer range 0 to KW;
     lo_tdata : std_ulogic_vector(DW-1 downto 0);
     lo_tuser : std_ulogic_vector(UW-1 downto 0);
-    hi_tkeep : std_ulogic_vector(KW-1 downto 0);
+    hi_count : integer range 0 to KW;
     hi_tdata : std_ulogic_vector(DW-1 downto 0);
     hi_tuser : std_ulogic_vector(UW-1 downto 0);
   ) return pack_t
   is
-    variable j : integer range 0 to KW := 0;
-    variable k : integer range 0 to KW := 0;
-    variable result : pack_t := PACK_DEFAULT;
+    variable tkeep : std_ulogic_vector(KW * 2 - 1 downto 0) := (others => '0');
+    variable tdata : std_ulogic_vector(DW * 2 - 1 downto 0) := (others => '-');
+    variable tuser : std_ulogic_vector(UW * 2 - 1 downto 0) := (others => '-');
+    variable combined_count : integer range 0 to KW * 2 := lo_count + hi_count;
+    variable result : pack_t;
   begin
-    for i in 0 to KW - 1 loop
-      if lo_tkeep(i) = '1' then
-        -- Pack byte from lower input to packed output
-        result.packed_tkeep(j) := '1';
-        result.packed_tdata(j * DBW + DBW - 1 downto j * DBW) :=
-            lo_tdata(i * DBW + DBW - 1 downto i * DBW);
-        result.packed_tuser(j * UBW + UBW - 1 downto j * UBW) :=
-            lo_tuser(i * UBW + UBW - 1 downto i * UBW);
-        j := j + 1;
-      end if;
-    end loop;
 
-    for i in 0 to KW - 1 loop
-      if hi_tkeep(i) = '1' then
-        if j < KW then
-          -- Pack byte from upper input to packed output
-          result.packed_tkeep(j) := '1';
-          result.packed_tdata(j * DBW + DBW - 1 downto j * DBW) :=
-              hi_tdata(i * DBW + DBW - 1 downto i * DBW);
-          result.packed_tuser(j * UBW + UBW - 1 downto j * UBW) :=
-              hi_tuser(i * UBW + UBW - 1 downto i * UBW);
-          j := j + 1;
-        else
-          -- Pack byte from upper input to residual output
-          result.resid_tkeep(k) := '1';
-          result.resid_tdata(k * DBW + DBW - 1 downto k * DBW) :=
-              hi_tdata(i * DBW + DBW - 1 downto i * DBW);
-          result.resid_tuser(k * UBW + UBW - 1 downto k * UBW) :=
-              hi_tuser(i * UBW + UBW - 1 downto i * UBW);
-          k := k + 1;
-        end if;
-      end if;
-    end loop;
+    tdata(lo_count * DBW - 1 downto 0) := lo_tdata(lo_count * DBW - 1 downto 0);
+    tuser(lo_count * UBW - 1 downto 0) := lo_tuser(lo_count * UBW - 1 downto 0);
+
+    tdata(combined_count * DBW - 1 downto lo_count * DBW) := hi_tdata(hi_count * DBW - 1 downto 0);
+    tuser(combined_count * UBW - 1 downto lo_count * UBW) := hi_tuser(hi_count * UBW - 1 downto 0);
+
+    tkeep(combined_count - 1 downto 0) := (others=>'1');
+
+    result.packed_tkeep := tkeep(KW - 1 downto 0);
+    result.packed_tdata := tdata(DW - 1 downto 0);
+    result.packed_tuser := tuser(UW - 1 downto 0);
+    result.resid_tkeep  := tkeep(KW * 2 - 1 downto KW);
+    result.resid_tdata  := tdata(DW * 2 - 1 downto DW);
+    result.resid_tuser  := tuser(UW * 2 - 1 downto UW);
 
     return result;
   end function;
@@ -137,6 +111,9 @@ architecture rtl of axis_pack is
     end loop;
     return true;
   end function;
+
+  signal resid_count : integer range 0 to KW;
+  signal input_count : integer range 0 to KW;
 
 begin
 
@@ -164,20 +141,23 @@ begin
   end process;
 
   -- ---------------------------------------------------------------------------
+  resid_count <= cnt_ones(resid_tkeep_reg);
+  input_count <= cnt_ones(s_axis.tkeep);
   oe <= m_axis.tready or not m_axis.tvalid;
   s_axis.tready <= oe and (state = ST_PACK);
   packed_all_are_valid <= and pack.packed_tkeep;
   packed_at_least_one_is_valid <= or pack.packed_tkeep;
   resid_at_least_one_is_valid <= or pack.resid_tkeep;
 
-  pack <= calc_pack(
-    lo_tkeep => resid_tkeep,
-    lo_tdata => resid_tdata,
-    lo_tuser => resid_tuser,
-    hi_tkeep => s_axis.tkeep,
+  pack <= calc_pack (
+    lo_count => resid_count,
+    lo_tdata => resid_tdata_reg,
+    lo_tuser => resid_tuser_reg,
+    hi_count => input_count,
     hi_tdata => s_axis.tdata,
     hi_tuser => s_axis.tuser
   );
+
 
   -- ---------------------------------------------------------------------------
   prc_fsm : process (clk) begin
@@ -205,15 +185,15 @@ begin
               -- to be transmitted on the next cycle and shift in the residual
               -- data to be transmitted the next time we have a new full output
               -- beat.
-              resid_tkeep  <= pack.resid_tkeep;
-              resid_tdata  <= pack.resid_tdata;
-              resid_tuser  <= pack.resid_tuser;
+              resid_tkeep_reg  <= pack.resid_tkeep;
+              resid_tdata_reg  <= pack.resid_tdata;
+              resid_tuser_reg  <= pack.resid_tuser;
             else
               -- Otherwise, store the partially-packed output data in the
               -- residual buffer.
-              resid_tkeep  <= pack.packed_tkeep;
-              resid_tdata  <= pack.packed_tdata;
-              resid_tuser  <= pack.packed_tuser;
+              resid_tkeep_reg  <= pack.packed_tkeep;
+              resid_tdata_reg  <= pack.packed_tdata;
+              resid_tuser_reg  <= pack.packed_tuser;
             end if;
 
             if s_axis.tlast then
@@ -229,7 +209,7 @@ begin
                 -- Otherwise, if there are no residual bytes left at this point,
                 -- we're done.
                 m_axis.tlast <= '1';
-                resid_tkeep  <= (others => '0');
+                resid_tkeep_reg  <= (others => '0');
               end if;
 
             else
@@ -247,11 +227,11 @@ begin
           if oe then
             -- If output is ready
             m_axis.tvalid <= '1';
-            m_axis.tdata  <= resid_tdata;
-            m_axis.tuser  <= resid_tuser;
-            m_axis.tkeep  <= resid_tkeep;
+            m_axis.tdata  <= resid_tdata_reg;
+            m_axis.tuser  <= resid_tuser_reg;
+            m_axis.tkeep  <= resid_tkeep_reg;
             m_axis.tlast  <= '1';
-            resid_tkeep     <= (others => '0');
+            resid_tkeep_reg     <= (others => '0');
             state           <= ST_PACK;
           end if;
 
@@ -261,7 +241,7 @@ begin
 
       if srst then
         m_axis.tvalid  <= '0';
-        resid_tkeep      <= (others => '0');
+        resid_tkeep_reg      <= (others => '0');
         state            <= ST_PACK;
       end if;
     end if;

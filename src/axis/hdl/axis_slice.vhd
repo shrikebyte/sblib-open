@@ -60,22 +60,13 @@ architecture rtl of axis_slice is
   ) return sliced_tkeep_t
   is
     variable result : sliced_tkeep_t;
-    variable mask : std_ulogic_vector(KW-1 downto 0);
-    variable num_bytes_remain : u_unsigned(num_bytes'range) := num_bytes_in_current;
+    variable mask : std_ulogic_vector(KW-1 downto 0) := (others=>'0');
   begin
-    for i in 0 to KW-1 loop
-      if num_bytes_remain /= 0 then
-        mask(i) := '1';
-        if tkeep(i) then
-          num_bytes_remain := num_bytes_remain - 1;
-        end if;
-      else
-        mask(i) := '0';
-      end if;
-    end loop;
 
-    result.pkt0_tkeep := tkeep and mask;
-    result.pkt1_tkeep := tkeep and not mask;
+    mask(to_integer(num_bytes_in_current) - 1 downto 0) := (others=>'1');
+
+    result.pkt0_tkeep := mask;
+    result.pkt1_tkeep := not mask;
 
     return result;
   end function;
