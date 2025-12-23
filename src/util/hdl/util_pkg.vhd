@@ -178,6 +178,10 @@ package util_pkg is
     vec : u_unsigned
   ) return natural;
 
+  function cnt_ones_contig (
+    vec : std_ulogic_vector
+  ) return natural;
+
   function is_onehot (
     vec : std_logic_vector
   ) return boolean;
@@ -272,6 +276,22 @@ package body util_pkg is
     for i in vec'range loop
       if vec(i) = '1' then
         tmp := tmp + 1;
+      end if;
+    end loop;
+    return tmp;
+  end function;
+
+  -- ---------------------------------------------------------------------------
+  -- Optomized version of cnt_ones that assumes input bits are
+  -- contiguous from low to high.
+  function cnt_ones_contig (
+    vec : std_ulogic_vector
+  ) return natural is
+    variable tmp : natural := 0;
+  begin
+    for i in vec'low to vec'high loop
+      if vec(i) then
+        tmp := i + 1;
       end if;
     end loop;
     return tmp;

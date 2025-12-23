@@ -25,6 +25,14 @@ end entity;
 
 architecture rtl of axis_pack is
 
+  constant DW : integer := m_axis.tdata'length;
+  constant KW : integer := m_axis.tkeep'length;
+  constant UW : integer := m_axis.tuser'length;
+  constant DBW : integer := DW / KW;
+  constant UBW : integer := UW / KW;
+
+  constant KW_ZEROS : std_ulogic_vector(KW-1 downto 0) := (others=>'0');
+
   -- Not synthesized. Only for assertion check.
   function is_contiguous(vec : std_ulogic_vector) return boolean is
     variable saw_zero : boolean := false;
@@ -39,14 +47,6 @@ architecture rtl of axis_pack is
     end loop;
     return true;
   end function;
-
-  constant DW : integer := m_axis.tdata'length;
-  constant KW : integer := m_axis.tkeep'length;
-  constant UW : integer := m_axis.tuser'length;
-  constant DBW : integer := DW / KW;
-  constant UBW : integer := UW / KW;
-
-  constant KW_ZEROS : std_ulogic_vector(KW-1 downto 0) := (others=>'0');
 
   type state_t is (ST_PACK, ST_LAST);
   signal state_nxt : state_t;
@@ -71,7 +71,6 @@ architecture rtl of axis_pack is
   );
 
   signal pipe0_axis_cnt : integer range 0 to KW;
-
   signal offset_nxt : integer range 0 to KW - 1;
   signal offset_reg : integer range 0 to KW - 1;
 
@@ -84,6 +83,10 @@ begin
 
   assert UW mod KW = 0
     report "axis_pack: User width must be evenly divisible by keep width."
+    severity error;
+
+  assert is_pwr2(KW)
+    report "axis_pack: Keep width must be a power of 2."
     severity error;
 
   prc_assert : process (clk) begin
@@ -115,7 +118,7 @@ begin
         pipe0_axis.tkeep    <= s_axis.tkeep;
         pipe0_axis.tuser    <= s_axis.tuser;
         --
-        pipe0_axis_cnt   <= cnt_ones(s_axis.tkeep);
+        pipe0_axis_cnt   <= cnt_ones_contig(s_axis.tkeep);
       elsif pipe0_axis.tready then
         pipe0_axis.tvalid <= '0';
       end if;
