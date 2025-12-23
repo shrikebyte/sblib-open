@@ -104,8 +104,9 @@ begin
   end process;
 
   -- ---------------------------------------------------------------------------
-  s_axis.tready <= (pipe0_axis.tready or not pipe0_axis.tvalid);
-  pipe0_axis.tready <= (pipe1_axis_reg.tready or not pipe1_axis_reg.tvalid) and (state_reg = ST_PACK);
+  s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
+  pipe0_axis.tready <= (pipe1_axis_reg.tready or not pipe1_axis_reg.tvalid) and
+                       (state_reg = ST_PACK);
 
   -- ---------------------------------------------------------------------------
   -- Pre-calculate pipe0_axis_cnt for better timing

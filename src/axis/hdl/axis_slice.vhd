@@ -14,6 +14,7 @@ use work.axis_pkg.all;
 
 entity axis_slice is
   generic (
+    G_MAX_M0_BYTES : positive := 2048;
     G_PACK_OUTPUT : boolean := true;
   );
   port (
@@ -29,7 +30,7 @@ entity axis_slice is
     --! second output port. Note tat this does not necessarily have to be
     --! 8-bit bytes. For example, if data width is 32 and keep width is 2, then
     --! byte width would be 16.
-    num_bytes  : in u_unsigned;
+    num_bytes  : in natural range 0 to G_MAX_M0_BYTES;
     --! Pulses if the length of the input packet was shorter than split_bytes.
     sts_err_runt : out std_ulogic;
   );
@@ -46,38 +47,21 @@ architecture rtl of axis_slice is
   type state_t is (ST_IDLE, ST_TX0, ST_PARTIAL, ST_TX1);
   signal state : state_t;
 
-  signal num_bytes_remaining_in_pkt0 : u_unsigned(num_bytes'range);
-  signal num_bytes_in_this_beat : natural range 0 to s_axis.tkeep'length;
+  signal remain_cnt : natural range 0 to G_MAX_M0_BYTES;
+  signal pipe0_axis_cnt : natural range 0 to KW;
 
-  type sliced_tkeep_t is record
-    pkt0_tkeep: std_ulogic_vector(KW-1 downto 0);
-    pkt1_tkeep: std_ulogic_vector(KW-1 downto 0);
-  end record;
-
-  impure function calc_sliced_tkeep (
-    tkeep : std_ulogic_vector(KW-1 downto 0);
-    num_bytes_in_current : u_unsigned(num_bytes'range);
-  ) return sliced_tkeep_t
-  is
-    variable result : sliced_tkeep_t;
-    variable mask : std_ulogic_vector(KW-1 downto 0) := (others=>'0');
-  begin
-
-    mask(to_integer(num_bytes_in_current) - 1 downto 0) := (others=>'1');
-
-    result.pkt0_tkeep := mask;
-    result.pkt1_tkeep := not mask;
-
-    return result;
-  end function;
-
-  signal sliced_tkeep : sliced_tkeep_t;
-  signal pkt1_tkeep : std_ulogic_vector(s_axis.tkeep'range);
-  signal pkt1_tlast : std_ulogic;
-  signal int0_axis_oe : std_ulogic;
-  signal s_axis_xact : std_ulogic;
+  signal partial_tkeep : std_ulogic_vector(s_axis.tkeep'range);
+  signal partial_tdata : std_ulogic_vector(s_axis.tdata'range);
+  signal partial_tuser : std_ulogic_vector(s_axis.tuser'range);
+  signal partial_tlast : std_ulogic;
   signal int0_axis_tid : u_unsigned(0 downto 0);
   signal int1_axis_tid : u_unsigned(0 downto 0);
+
+  signal pipe0_axis : axis_t (
+    tdata(s_axis.tdata'range),
+    tkeep(s_axis.tkeep'range),
+    tuser(s_axis.tuser'range)
+  );
 
   signal int0_axis : axis_t (
     tdata(s_axis.tdata'range),
@@ -94,14 +78,27 @@ architecture rtl of axis_slice is
 begin
 
   -- ---------------------------------------------------------------------------
-  num_bytes_in_this_beat <= cnt_ones(s_axis.tkeep);
-  int0_axis_oe <= int0_axis.tready or not int0_axis.tvalid;
-  s_axis.tready <= int0_axis_oe and ((state = ST_TX0) or (state = ST_TX1));
-  s_axis_xact <= s_axis.tvalid and s_axis.tready;
-  sliced_tkeep <= calc_sliced_tkeep(
-    s_axis.tkeep,
-    num_bytes_remaining_in_pkt0
-  );
+  s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
+  pipe0_axis.tready <= (int0_axis.tready or not int0_axis.tvalid) and
+                       ((state = ST_TX0) or (state = ST_TX1));
+
+  -- ---------------------------------------------------------------------------
+  -- Pre-calculate pipe0_axis_cnt for better timing
+  prc_pipe0 : process (clk) begin
+    if rising_edge(clk) then
+      if s_axis.tvalid and s_axis.tready then
+        pipe0_axis.tvalid   <= '1';
+        pipe0_axis.tlast    <= s_axis.tlast;
+        pipe0_axis.tdata    <= s_axis.tdata;
+        pipe0_axis.tkeep    <= s_axis.tkeep;
+        pipe0_axis.tuser    <= s_axis.tuser;
+        --
+        pipe0_axis_cnt   <= cnt_ones_contig(s_axis.tkeep);
+      elsif pipe0_axis.tready then
+        pipe0_axis.tvalid <= '0';
+      end if;
+    end if;
+  end process;
 
   -- ---------------------------------------------------------------------------
   prc_fsm : process (clk) begin
@@ -116,9 +113,9 @@ begin
       case state is
         -- ---------------------------------------------------------------------
         when ST_IDLE =>
-          if s_axis.tvalid then
+          if pipe0_axis.tvalid then
             if num_bytes /= 0 then
-              num_bytes_remaining_in_pkt0 <= num_bytes;
+              remain_cnt <= num_bytes;
               state    <= ST_TX0;
             else
               state    <= ST_TX1;
@@ -127,36 +124,36 @@ begin
 
         -- ---------------------------------------------------------------------
         when ST_TX0 =>
-          if s_axis_xact then
+          if pipe0_axis.tvalid and pipe0_axis.tready then
 
             int0_axis.tvalid  <= '1';
-            int0_axis.tdata   <= s_axis.tdata;
-            int0_axis.tuser   <= s_axis.tuser;
+            int0_axis.tdata   <= pipe0_axis.tdata;
+            int0_axis.tuser   <= pipe0_axis.tuser;
             int0_axis_tid     <= "0";
 
-            if num_bytes_remaining_in_pkt0 > num_bytes_in_this_beat then
+            if remain_cnt > pipe0_axis_cnt then
               -- In the middle of sending packet0
-              int0_axis.tkeep   <= s_axis.tkeep;
+              int0_axis.tkeep   <= pipe0_axis.tkeep;
               --
-              if s_axis.tlast then
+              if pipe0_axis.tlast then
                 sts_err_runt      <= '1';
                 int0_axis.tlast   <= '1';
-                num_bytes_remaining_in_pkt0 <= (others => '0');
+                remain_cnt <= 0;
                 state <= ST_IDLE;
               else
                 int0_axis.tlast   <= '0';
-                num_bytes_remaining_in_pkt0 <= num_bytes_remaining_in_pkt0 - num_bytes_in_this_beat;
+                remain_cnt <= remain_cnt - pipe0_axis_cnt;
               end if;
               --
-            elsif num_bytes_remaining_in_pkt0 = num_bytes_in_this_beat then
+            elsif remain_cnt = pipe0_axis_cnt then
               -- Don't need to slice the last beat because the number of bytes
               -- in the current beat matches up perfectly with the number
               -- of remaining bytes in packet0.
               int0_axis.tlast   <= '1';
-              int0_axis.tkeep   <= s_axis.tkeep;
-              num_bytes_remaining_in_pkt0 <= (others => '0');
+              int0_axis.tkeep   <= pipe0_axis.tkeep;
+              remain_cnt <= 0;
               --
-              if s_axis.tlast then
+              if pipe0_axis.tlast then
                 sts_err_runt <= '1';
                 state <= ST_IDLE;
               else
@@ -166,51 +163,61 @@ begin
             else
               -- Need to slice the last beat
               int0_axis.tlast   <= '1';
-              int0_axis.tkeep   <= sliced_tkeep.pkt0_tkeep;
+              int0_axis.tkeep(remain_cnt - 1 downto 0) <= pipe0_axis.tkeep(remain_cnt - 1 downto 0);
+              int0_axis.tkeep(KW - 1 downto remain_cnt) <= (others=>'0');
               --
-              if s_axis.tlast then
+              if pipe0_axis.tlast then
                 -- If we are slicing on a tlast beat, then tlast needs to be
                 -- asserted for the last beat of packet0 output as well as for
                 -- the first beat of packet1 output. We register this
                 -- information here and use it in the next state.
-                pkt1_tlast <= '1';
+                partial_tlast <= '1';
               else
-                pkt1_tlast <= '0';
+                partial_tlast <= '0';
               end if;
-              num_bytes_remaining_in_pkt0 <= (others => '0');
-              pkt1_tkeep <= sliced_tkeep.pkt1_tkeep;
+              remain_cnt <= 0;
+
+              -- Store the upper bytes of the partial beat for the next output
+              -- beat
+              partial_tkeep(KW - remain_cnt - 1 downto 0) <= pipe0_axis.tkeep(KW - 1 downto remain_cnt);
+              partial_tkeep(KW - 1 downto KW - remain_cnt) <= (others=>'0');
+              partial_tdata((KW - remain_cnt) * DBW - 1 downto 0) <= pipe0_axis.tdata(KW * DBW - 1 downto remain_cnt * DBW);
+              partial_tuser((KW - remain_cnt) * UBW - 1 downto 0) <= pipe0_axis.tuser(KW * UBW - 1 downto remain_cnt * UBW);
+
               state <= ST_PARTIAL;
             end if;
           end if;
 
         -- ---------------------------------------------------------------------
         when ST_PARTIAL =>
-          if int0_axis_oe then
+          if int0_axis.tready then
+            -- We already know that pipe1_axis_reg.tvalid is high here because
+            -- it was set by the prev state.
             int0_axis.tvalid  <= '1';
-            int0_axis.tkeep   <= pkt1_tkeep;
-            int0_axis.tdata   <= int0_axis.tdata;
-            int0_axis.tuser   <= int0_axis.tuser;
+            int0_axis.tkeep   <= partial_tkeep;
+            int0_axis.tdata   <= partial_tdata;
+            int0_axis.tuser   <= partial_tuser;
             int0_axis_tid     <= "1";
             --
-            if pkt1_tlast then
+            if partial_tlast then
               int0_axis.tlast <= '1';
               state <= ST_IDLE;
             else
               int0_axis.tlast <= '0';
               state <= ST_TX1;
             end if;
-            pkt1_tlast <= '0';
+            partial_tlast <= '0';
           end if;
 
         when ST_TX1 =>
-          if s_axis_xact then
+          if pipe0_axis.tvalid and pipe0_axis.tready then
             int0_axis.tvalid  <= '1';
-            int0_axis.tkeep   <= s_axis.tkeep;
-            int0_axis.tdata   <= s_axis.tdata;
-            int0_axis.tuser   <= s_axis.tuser;
+            int0_axis.tkeep   <= pipe0_axis.tkeep;
+            int0_axis.tdata   <= pipe0_axis.tdata;
+            int0_axis.tuser   <= pipe0_axis.tuser;
             int0_axis_tid     <= "1";
             --
-            if s_axis.tlast then
+            if pipe0_axis.tlast then
               int0_axis.tlast  <= '1';
               state            <= ST_IDLE;
             else

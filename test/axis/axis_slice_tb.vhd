@@ -25,7 +25,7 @@ use work.bfm_pkg.all;
 entity axis_slice_tb is
   generic (
     RUNNER_CFG      : string;
-    G_ENABLE_JITTER : boolean := true;
+    G_ENABLE_JITTER : boolean := false;
   );
 end entity;
 
@@ -40,6 +40,7 @@ architecture tb of axis_slice_tb is
   constant UW          : integer  := 32;
   constant DBW         : integer  := DW / KW;
   constant UBW         : integer  := UW / KW;
+  constant MAX_M0_BYTES : integer := 2048;
 
   -- TB Signals
   signal clk   : std_ulogic := '1';
@@ -60,7 +61,7 @@ architecture tb of axis_slice_tb is
     tuser(UW-1 downto 0)
   );
 
-  signal  num_bytes    :  u_unsigned(7 downto 0) := to_unsigned(7, 8);
+  signal  num_bytes    :  natural range 0 to MAX_M0_BYTES;
   signal  sts_err_runt :  std_ulogic;
 
   -- Testbench BFMs
@@ -73,10 +74,10 @@ architecture tb of axis_slice_tb is
   constant DATA_QUEUE : queue_t := new_queue;
   constant USER_QUEUE : queue_t := new_queue;
 
-  constant REF_DATA_QUEUES : queue_vec_t(m_axis'range) := 
+  constant REF_DATA_QUEUES : queue_vec_t(m_axis'range) :=
     get_new_queues(m_axis'length);
-  constant REF_USER_QUEUES : queue_vec_t(m_axis'range) := 
-    get_new_queues(m_axis'length);  
+  constant REF_USER_QUEUES : queue_vec_t(m_axis'range) :=
+    get_new_queues(m_axis'length);
 
   signal num_packets_checked : nat_arr_t(m_axis'range) := (others => 0);
 
@@ -85,7 +86,7 @@ begin
   -- ---------------------------------------------------------------------------
   test_runner_watchdog(runner, 100 us);
   prc_main : process is
-    
+
     variable rnd : randomptype;
     variable num_tests : nat_arr_t(m_axis'range) := (others => 0);
 
@@ -98,7 +99,7 @@ begin
       begin
         if (PACKET_LENGTH_BYTES > SPLIT_LENGTH_BYTES) then
           return SPLIT_LENGTH_BYTES;
-        else 
+        else
           return PACKET_LENGTH_BYTES;
         end if;
       end function;
@@ -107,7 +108,7 @@ begin
       begin
         if (PACKET_LENGTH_BYTES > SPLIT_LENGTH_BYTES) then
           return PACKET_LENGTH_BYTES - SPLIT_LENGTH_BYTES;
-        else 
+        else
           return 0;
         end if;
       end function;
@@ -162,10 +163,10 @@ begin
     begin
 
       assert SPLIT_LENGTH_BYTES >= 0 and SPLIT_LENGTH_BYTES < 2**UBW
-        report 
+        report
           "ERROR: SPLIT_LENGTH_BYTES > 0 and SPLIT_LENGTH_BYTES < " &
           to_string(2**UBW)
-        severity error;      
+        severity error;
 
       -- Random test data packet
       random_integer_array (
@@ -249,6 +250,7 @@ begin
   -- ---------------------------------------------------------------------------
   u_axis_slice : entity work.axis_slice
   generic map (
+    G_MAX_M0_BYTES => MAX_M0_BYTES,
     G_PACK_OUTPUT => true
   )
   port map (
@@ -287,6 +289,6 @@ begin
   end generate;
 
   -- ---------------------------------------------------------------------------
-  num_bytes <= u_unsigned(s_axis.tuser(UBW-1 downto 0));
+  num_bytes <= to_integer(u_unsigned(s_axis.tuser(UBW-1 downto 0)));
 
 end architecture;
