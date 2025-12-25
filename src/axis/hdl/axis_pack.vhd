@@ -31,21 +31,6 @@ architecture rtl of axis_pack is
   constant DBW : integer := DW / KW;
   constant UBW : integer := UW / KW;
 
-  -- Not synthesized. Only for assertion check.
-  function is_contiguous(vec : std_ulogic_vector) return boolean is
-    variable saw_zero : boolean := false;
-  begin
-    for i in vec'low to vec'high loop
-      if vec(i) = '0' then
-        saw_zero := true;
-      elsif saw_zero then
-        -- Found a '1' after seeing a '0' - not contiguous!
-        return false;
-      end if;
-    end loop;
-    return true;
-  end function;
-
   type state_t is (ST_PACK, ST_LAST);
   signal state_nxt : state_t;
   signal state_reg : state_t;
@@ -89,14 +74,15 @@ begin
 
   prc_assert : process (clk) begin
     if rising_edge(clk) then
-      assert not (s_axis.tvalid = '1' and s_axis.tlast = '1' and (nor s_axis.tkeep))
+      assert not (s_axis.tvalid = '1' and s_axis.tlast = '1' and
+        (nor s_axis.tkeep) = '1')
         report "axis_pack: Null tlast beat detected on input. At " &
           "least one tkeep bit must be set on tlast."
         severity error;
 
-      assert not (s_axis.tvalid = '1' and not is_contiguous(s_axis.tkeep))
-        report "Non-contiguous tkeep detected on input. tkeep must be " &
-        "contiguous (e.g., 0001, 0011, 0111, but not 0101 or 0100)."
+      assert not (s_axis.tvalid = '1' and not is_contig(s_axis.tkeep))
+        report "axis_pack: Non-contiguous tkeep detected on input. tkeep " &
+          "must be contiguous (e.g., 0001, 0011, 0111, but not 0101 or 0100)."
         severity error;
     end if;
   end process;
@@ -104,7 +90,7 @@ begin
   -- ---------------------------------------------------------------------------
   s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
   pipe0_axis.tready <= (pipe1_axis_reg.tready or not pipe1_axis_reg.tvalid) and
-                       (state_reg = ST_PACK);
+                       to_sl((state_reg = ST_PACK));
 
   -- ---------------------------------------------------------------------------
   -- Pre-calculate pipe0_axis_cnt for better timing

@@ -83,7 +83,7 @@ begin
   -- ---------------------------------------------------------------------------
   s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
   pipe0_axis.tready <= (int0_axis.tready or not int0_axis.tvalid) and
-                       ((state = ST_TX0) or (state = ST_TX1));
+                       to_sl(((state = ST_TX0) or (state = ST_TX1)));
 
   -- ---------------------------------------------------------------------------
   -- Pre-calculate pipe0_axis_cnt for better timing

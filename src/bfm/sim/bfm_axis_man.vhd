@@ -141,7 +141,6 @@ begin
     variable data_value : natural := 0;
     variable user_value : natural := 0;
     variable i : natural := 0;
-    variable is_last_byte : boolean := false;
     variable seed : string_seed_t;
     variable rnd : RandomPType;
     variable num_bytes_in_this_beat : integer := 0;
@@ -194,7 +193,7 @@ begin
 
         int_axis_tlast <= to_sl(num_bytes_in_this_beat > 0 and i = packet_length_bytes);
 
-        wait until m_axis.tready and m_axis.tvalid and rising_edge(clk);
+        wait until m_axis.tready = '1' and m_axis.tvalid = '1' and rising_edge(clk);
 
         -- Default for next beat. We will fill in the byte lanes that are used.
         int_axis_tlast <= '0';

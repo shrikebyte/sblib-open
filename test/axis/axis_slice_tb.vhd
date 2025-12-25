@@ -25,8 +25,7 @@ use work.bfm_pkg.all;
 entity axis_slice_tb is
   generic (
     RUNNER_CFG      : string;
-    G_ENABLE_JITTER : boolean := true;
-    G_PACKED_INPUT_STREAM : boolean := false
+    G_ENABLE_JITTER : boolean := true
   );
 end entity;
 
@@ -274,8 +273,7 @@ begin
   generic map(
     G_DATA_QUEUE   => DATA_QUEUE,
     G_USER_QUEUE   => USER_QUEUE,
-    G_STALL_CONFIG => STALL_CFG,
-    G_PACKED_STREAM => G_PACKED_INPUT_STREAM
+    G_STALL_CONFIG => STALL_CFG
   )
   port map(
     clk    => clk,
@@ -304,7 +302,8 @@ begin
       wait until rising_edge(clk);
     end loop;
     num_bytes <= pop(NUM_BYTES_QUEUE);
-    wait until s_axis.tvalid and s_axis.tready and s_axis.tlast and rising_edge(clk);
+    wait until (s_axis.tvalid and s_axis.tready and s_axis.tlast) = '1'
+      and rising_edge(clk);
   end process;
 
 end architecture;

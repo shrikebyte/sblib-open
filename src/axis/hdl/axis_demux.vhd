@@ -52,8 +52,8 @@ begin
               state_reg <= ST_LOCKED;
             end if;
           when ST_LOCKED =>
-            if m_axis(sel_reg).tvalid and 
-               m_axis(sel_reg).tready and 
+            if m_axis(sel_reg).tvalid and
+               m_axis(sel_reg).tready and
                m_axis(sel_reg).tlast then
               state_reg <= ST_UNLOCKED;
             end if;
@@ -68,9 +68,9 @@ begin
 
     gen_assign_m_axis : for i in m_axis'range generate
       prc_out_sel : process (all) begin
-        m_axis(i).tvalid <= (s_axis.tvalid) and 
-                            (state_reg = ST_LOCKED) and 
-                            (sel_reg = i);
+        m_axis(i).tvalid <= (s_axis.tvalid) and
+                            to_sl((state_reg = ST_LOCKED)) and
+                            to_sl((sel_reg = i));
         m_axis(i).tlast  <= s_axis.tlast;
         m_axis(i).tdata  <= s_axis.tdata;
         m_axis(i).tkeep  <= s_axis.tkeep;
@@ -78,7 +78,8 @@ begin
       end process;
     end generate;
 
-    s_axis.tready <= (m_axis(sel_reg).tready) and (state_reg = ST_LOCKED);
+    s_axis.tready <= (m_axis(sel_reg).tready) and
+                      to_sl((state_reg = ST_LOCKED));
 
   -- ---------------------------------------------------------------------------
   else generate
@@ -97,8 +98,8 @@ begin
             state_nxt <= ST_LOCKED;
           end if;
         when ST_LOCKED =>
-          if m_axis(sel_reg).tvalid and 
-             m_axis(sel_reg).tready and 
+          if m_axis(sel_reg).tvalid and
+             m_axis(sel_reg).tready and
              m_axis(sel_reg).tlast then
             if s_axis.tvalid then
               sel_nxt <= sel;
@@ -124,7 +125,7 @@ begin
     gen_assign_m_axis : for i in m_axis'range generate
       prc_out_sel : process (clk) begin
         if rising_edge(clk) then
-          if s_axis.tvalid and s_axis.tready and (sel_nxt = i) then
+          if s_axis.tvalid and s_axis.tready and to_sl((sel_nxt = i)) then
             m_axis(i).tvalid <= '1';
             m_axis(i).tlast  <= s_axis.tlast;
             m_axis(i).tdata  <= s_axis.tdata;
@@ -141,8 +142,8 @@ begin
       end process;
     end generate;
 
-    s_axis.tready <= (m_axis(sel_nxt).tready or not m_axis(sel_nxt).tvalid) and 
-                     (state_nxt = ST_LOCKED);
+    s_axis.tready <= (m_axis(sel_nxt).tready or not m_axis(sel_nxt).tvalid) and
+                     to_sl((state_nxt = ST_LOCKED));
 
   end generate;
 

@@ -25,11 +25,14 @@ use work.bfm_pkg.all;
 entity axis_resize_tb is
   generic (
     RUNNER_CFG      : string;
-    G_ENABLE_JITTER : boolean := true;
+    G_ENABLE_JITTER : boolean  := true;
+    G_PACKED_STREAM : boolean  := true;
     G_S_KW          : positive := 8;
     G_S_DW          : positive := 64;
+    G_S_UW          : positive := 32;
     G_M_KW          : positive := 8;
-    G_M_DW          : positive := 8
+    G_M_DW          : positive := 8;
+    G_M_UW          : positive := 32
   );
 end entity;
 
@@ -40,29 +43,15 @@ architecture tb of axis_resize_tb is
   constant CLK_PERIOD   : time := 5 ns;
   constant S_KW         : integer := G_S_KW;
   constant S_DW         : integer := G_S_DW;
-  constant S_UW         : integer := G_S_DW;
+  constant S_UW         : integer := G_S_UW;
   constant S_DBW        : integer := S_DW / S_KW;
   constant S_UBW        : integer := S_UW / S_KW;
   constant M_KW         : integer := G_M_KW;
   constant M_DW         : integer := G_M_DW;
-  constant M_UW         : integer := G_M_DW;
+  constant M_UW         : integer := G_M_UW;
   constant M_DBW        : integer := M_DW / M_KW;
   constant M_UBW        : integer := M_UW / M_KW;
 
-  type resize_mode_t is (MODE_PASSTHRU, MODE_UPSIZE, MODE_DOWNSIZE);
-
-  function calc_mode (s_dw : positive; m_dw : positive) return resize_mode_t is
-  begin
-    if s_dw = m_dw then
-      return MODE_PASSTHRU;
-    elsif s_dw > m_dw then
-      return MODE_DOWNSIZE;
-    else
-      return MODE_UPSIZE;
-    end if;
-  end function;
-
-  constant MODE : resize_mode_t := calc_mode(G_S_DW, G_M_DW);
 
   -- TB Signals
   signal clk   : std_ulogic := '1';
@@ -192,7 +181,8 @@ begin
   generic map(
     G_DATA_QUEUE   => DATA_QUEUE,
     G_USER_QUEUE   => USER_QUEUE,
-    G_STALL_CONFIG => STALL_CFG
+    G_STALL_CONFIG => STALL_CFG,
+    G_PACKED_STREAM => G_PACKED_STREAM
   )
   port map(
     clk    => clk,

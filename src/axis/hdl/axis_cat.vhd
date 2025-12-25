@@ -76,11 +76,11 @@ begin
 
   -- ---------------------------------------------------------------------------
   gen_assign_s_axis_tready : for i in s_axis'range generate
-    s_axis(i).tready <= int0_axis.tready and (sel = i);
+    s_axis(i).tready <= int0_axis.tready and to_sl((sel = i));
   end generate;
 
   int0_axis.tvalid <= s_axis(sel).tvalid and s_axis(sel).tready;
-  int0_axis.tlast  <= s_axis(sel).tlast and (sel = s_axis'high);
+  int0_axis.tlast  <= s_axis(sel).tlast and to_sl((sel = s_axis'high));
   int0_axis.tkeep  <= s_axis(sel).tkeep;
   int0_axis.tdata  <= s_axis(sel).tdata;
   int0_axis.tuser  <= s_axis(sel).tuser;

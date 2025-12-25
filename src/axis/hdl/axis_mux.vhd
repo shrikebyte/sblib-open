@@ -68,12 +68,12 @@ begin
     end process;
 
     gen_s_axis_tready : for i in s_axis'range generate
-      s_axis(i).tready <= (m_axis.tready) and 
-                          (state_reg = ST_LOCKED) and 
-                          (sel_reg = i);
+      s_axis(i).tready <= (m_axis.tready) and
+                          to_sl((state_reg = ST_LOCKED)) and
+                          to_sl((sel_reg = i));
     end generate;
 
-    m_axis.tvalid <= s_axis(sel_reg).tvalid and (state_reg = ST_LOCKED);
+    m_axis.tvalid <= s_axis(sel_reg).tvalid and to_sl((state_reg = ST_LOCKED));
     m_axis.tlast  <= s_axis(sel_reg).tlast;
     m_axis.tdata  <= s_axis(sel_reg).tdata;
     m_axis.tkeep  <= s_axis(sel_reg).tkeep;
@@ -120,9 +120,9 @@ begin
     end process;
 
     gen_assign_s_axis_tready : for i in s_axis'range generate
-      s_axis(i).tready <= (m_axis.tready or not m_axis.tvalid) and 
-                          (state_nxt = ST_LOCKED) and 
-                          (sel_nxt = i);
+      s_axis(i).tready <= (m_axis.tready or not m_axis.tvalid) and
+                          to_sl((state_nxt = ST_LOCKED)) and
+                          to_sl((sel_nxt = i));
     end generate;
 
     prc_output_ff : process(clk) begin

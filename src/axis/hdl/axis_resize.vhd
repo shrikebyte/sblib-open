@@ -59,6 +59,20 @@ begin
     "width."
     severity error;
 
+  prc_assert : process (clk) begin
+    if rising_edge(clk) then
+      assert not (s_axis.tvalid = '1' and s_axis.tlast = '1' and
+        (nor s_axis.tkeep) = '1')
+        report "axis_resize: Null tlast beat detected on input. At " &
+          "least one tkeep bit must be set on tlast."
+        severity error;
+
+      assert not (s_axis.tvalid = '1' and not is_contig(s_axis.tkeep))
+        report "axis_resize: Non-contiguous tkeep detected on input. tkeep " &
+          "must be contiguous (e.g., 0001, 0011, 0111, but not 0101 or 0100)."
+        severity error;
+    end if;
+  end process;
 
   -- ---------------------------------------------------------------------------
   -- Passthrough mode
@@ -130,7 +144,7 @@ begin
     end process;
 
     m_axis.tdata <= data_reg(m_axis.tdata'range);
-    m_axis.tuser <= user_reg(m_axis.tdata'range);
+    m_axis.tuser <= user_reg(m_axis.tuser'range);
     m_axis.tkeep <= keep_reg(m_axis.tkeep'range);
     m_axis.tlast <= last_reg and keep_reg_shft_is_zero;
 

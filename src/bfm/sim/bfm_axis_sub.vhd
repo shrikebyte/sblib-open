@@ -110,7 +110,7 @@ architecture sim of bfm_axis_sub is
   constant DBW : integer := DW / KW;
   constant UBW : integer := UW / KW;
 
-  constant BASE_ERROR_MESSAGE : string := "bfm_axis_sub - " & 
+  constant BASE_ERROR_MESSAGE : string := "bfm_axis_sub - " &
     G_LOGGER_NAME_SUFFIX & ": ";
 
   signal checker_is_ready : std_ulogic := '0';
@@ -158,7 +158,7 @@ begin
       k := i mod KW;
 
       if k = 0 then
-        wait until s_axis.tready and s_axis.tvalid and rising_edge(clk);
+        wait until s_axis.tready = '1' and s_axis.tvalid = '1' and rising_edge(clk);
 
         if G_ENABLE_TLAST then
           is_last_beat := i / KW = packet_length_beats - 1;
@@ -255,7 +255,7 @@ begin
   gen_check_tuser : if UW > 0 generate
   begin
 
-    assert G_REF_USER_QUEUE /= null_queue 
+    assert G_REF_USER_QUEUE /= null_queue
       report "Must set tuser reference queue";
 
     -- -------------------------------------------------------------------------
@@ -276,14 +276,14 @@ begin
         k := i mod KW;
 
         if k = 0 then
-          wait until s_axis.tready and s_axis.tvalid and rising_edge(clk);
+          wait until s_axis.tready = '1' and s_axis.tvalid = '1' and rising_edge(clk);
         end if;
 
         check_equal(
           u_unsigned(s_axis.tuser((k + 1) * UBW - 1 downto k * UBW)),
           get(user_packet, i),
-          BASE_ERROR_MESSAGE & 
-          "'tuser' check at packet_idx=" & 
+          BASE_ERROR_MESSAGE &
+          "'tuser' check at packet_idx=" &
           to_string(num_packets_checked)
         );
 
@@ -291,7 +291,7 @@ begin
           check_equal(
             s_axis.tlast,
             true,
-            BASE_ERROR_MESSAGE & 
+            BASE_ERROR_MESSAGE &
             "Length mismatch between data packet and user packet"
           );
         end if;

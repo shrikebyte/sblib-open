@@ -182,6 +182,10 @@ package util_pkg is
     vec : std_ulogic_vector
   ) return natural;
 
+  function is_contig(
+    vec : std_ulogic_vector
+  ) return boolean;
+
   function is_onehot (
     vec : std_logic_vector
   ) return boolean;
@@ -220,10 +224,6 @@ package util_pkg is
   function to_int(val : boolean) return integer;
   function to_bool(val : std_ulogic) return boolean;
   function to_bool(val : natural range 0 to 1) return boolean;
-  function "and" (left : boolean; right: std_ulogic) return boolean;
-  function "and" (left : std_ulogic; right: boolean) return boolean;
-  function "and" (left : boolean; right: std_ulogic) return std_ulogic;
-  function "and" (left : std_ulogic; right: boolean) return std_ulogic;
 
   function find_max (
     arr : int_arr_t
@@ -295,6 +295,20 @@ package body util_pkg is
       end if;
     end loop;
     return tmp;
+  end function;
+
+  -- Return true if a vector has contiguous ones from low to high.
+  function is_contig(vec : std_ulogic_vector) return boolean is
+    variable saw_zero : boolean := false;
+  begin
+    for i in vec'low to vec'high loop
+      if vec(i) = '0' then
+        saw_zero := true;
+      elsif saw_zero then
+        return false;
+      end if;
+    end loop;
+    return true;
   end function;
 
   -- ---------------------------------------------------------------------------
@@ -455,28 +469,6 @@ package body util_pkg is
   function to_bool(val : natural range 0 to 1) return boolean is
   begin
     return val = 1;
-  end function;
-
-  -- ---------------------------------------------------------------------------
-  -- Allow "and'ing" bools with std_logic
-  function "and" (left : boolean; right: std_ulogic) return boolean is
-  begin
-    return left and (right = '1');
-  end function;
-
-  function "and" (left : std_ulogic; right: boolean) return boolean is
-  begin
-    return (left = '1') and right;
-  end function;
-
-  function "and" (left : boolean; right: std_ulogic) return std_ulogic is
-  begin
-    return to_sl(left) and right;
-  end function;
-
-  function "and" (left : std_ulogic; right: boolean) return std_ulogic is
-  begin
-    return left and to_sl(right);
   end function;
 
   -- ---------------------------------------------------------------------------
