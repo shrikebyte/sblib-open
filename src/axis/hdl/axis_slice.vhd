@@ -6,6 +6,8 @@
 --! Slice one input packet into several output packets
 --! TODO: Potentially improve thruput by removing the tready wait at the
 --! start of each new packet.
+--! TODO: packer option. I think it's cleaner to let the
+--! user manually instantiate these externally if needed.
 --##############################################################################
 
 library ieee;
@@ -18,6 +20,7 @@ entity axis_slice is
   generic (
     G_MAX_M0_BYTES : positive := 2047;
     G_PACK_OUTPUT : boolean := true;
+    G_EXTRA_PIPE : boolean := false
   );
   port (
     clk    : in    std_ulogic;
@@ -53,9 +56,9 @@ architecture rtl of axis_slice is
   signal pipe0_num_bytes : natural range 0 to G_MAX_M0_BYTES;
   signal pipe0_axis_cnt : natural range 0 to KW;
 
-  signal partial_tkeep : std_ulogic_vector(s_axis.tkeep'range);
-  signal partial_tdata : std_ulogic_vector(s_axis.tdata'range);
-  signal partial_tuser : std_ulogic_vector(s_axis.tuser'range);
+  signal shft_tkeep : std_ulogic_vector(s_axis.tkeep'range);
+  signal shft_tdata : std_ulogic_vector(s_axis.tdata'range);
+  signal shft_tuser : std_ulogic_vector(s_axis.tuser'range);
   signal partial_tlast : std_ulogic;
   signal int0_axis_tid : u_unsigned(0 downto 0);
   signal int1_axis_tid : u_unsigned(0 downto 0);
@@ -78,35 +81,73 @@ architecture rtl of axis_slice is
     tuser(s_axis.tuser'range)
   );
 
+  --signal shft_tkeep_arr : slv_arr_t(0 to KW - 1)(DW - 1 downto 0);
+  signal shft_tdata_arr : slv_arr_t(1 to KW - 1)(DW - 1 downto 0);
+  signal shft_tuser_arr : slv_arr_t(1 to KW - 1)(UW - 1 downto 0);
+
 begin
 
   -- ---------------------------------------------------------------------------
-  s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
   pipe0_axis.tready <= (int0_axis.tready or not int0_axis.tvalid) and
                        to_sl(((state = ST_TX0) or (state = ST_TX1)));
 
   -- ---------------------------------------------------------------------------
-  -- Pre-calculate pipe0_axis_cnt for better timing
-  prc_pipe0 : process (clk) begin
-    if rising_edge(clk) then
-      if s_axis.tvalid and s_axis.tready then
-        pipe0_axis.tvalid   <= '1';
-        pipe0_axis.tlast    <= s_axis.tlast;
-        pipe0_axis.tdata    <= s_axis.tdata;
-        pipe0_axis.tkeep    <= s_axis.tkeep;
-        pipe0_axis.tuser    <= s_axis.tuser;
-        --
-        pipe0_axis_cnt <= cnt_ones_contig(s_axis.tkeep);
-        pipe0_num_bytes <= num_bytes;
-      elsif pipe0_axis.tready then
-        pipe0_axis.tvalid <= '0';
-      end if;
+  -- Pre-calculate pipe0_axis_cnt for better timing. This reduces the crit path
+  -- by about 1.5 ns / 2 logic levels on an Artix 7  when tkeep width is set
+  -- to 8. This will add more of noticable improvement as tkeep gets larger
+  -- This comes at the cost of extra registers and an additional cycle of
+  -- latency, so only include it if its really necessary.
+  gen_pipe0 : if G_EXTRA_PIPE generate
 
-      if srst then
-        pipe0_axis.tvalid <= '0';
+    s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
+
+    prc_pipe0 : process (clk) begin
+      if rising_edge(clk) then
+        if s_axis.tvalid and s_axis.tready then
+          pipe0_axis.tvalid   <= '1';
+          pipe0_axis.tlast    <= s_axis.tlast;
+          pipe0_axis.tdata    <= s_axis.tdata;
+          pipe0_axis.tkeep    <= s_axis.tkeep;
+          pipe0_axis.tuser    <= s_axis.tuser;
+          --
+          pipe0_axis_cnt <= cnt_ones_contig(s_axis.tkeep);
+          pipe0_num_bytes <= num_bytes;
+        elsif pipe0_axis.tready then
+          pipe0_axis.tvalid <= '0';
+        end if;
+
+        if srst then
+          pipe0_axis.tvalid <= '0';
+        end if;
       end if;
-    end if;
-  end process;
+    end process;
+
+  else generate
+
+    s_axis.tready <= pipe0_axis.tready;
+
+    pipe0_axis.tvalid   <= s_axis.tvalid;
+    pipe0_axis.tlast    <= s_axis.tlast;
+    pipe0_axis.tdata    <= s_axis.tdata;
+    pipe0_axis.tkeep    <= s_axis.tkeep;
+    pipe0_axis.tuser    <= s_axis.tuser;
+    pipe0_axis_cnt      <= cnt_ones_contig(s_axis.tkeep);
+    pipe0_num_bytes     <= num_bytes;
+
+  end generate;
+
+  -- ---------------------------------------------------------------------------
+  -- Pre-calculate the variable shift amounts with KW static shifts and use a
+  -- mux to select the final shifted output rather than using a general barrel
+  -- shifter. A mux has a shallower logic depth than a barrel shifter so this
+  -- improves timing. A general barrel shifter is not needed here because we
+  -- know the DBW and UBW shift ammounts at compile-time.
+  -- By virtue of how the FSM works, we also know that the shift amount will
+  -- never be 0 or KW, so we can skip computing these to save some LUTs.
+  gen_shift_mux : for i in 1 to KW - 1 generate
+    shft_tdata_arr(i) <= std_logic_vector(shift_right(unsigned(pipe0_axis.tdata), i * DBW));
+    shft_tuser_arr(i) <= std_logic_vector(shift_right(unsigned(pipe0_axis.tuser), i * UBW));
+  end generate;
 
   -- ---------------------------------------------------------------------------
   prc_fsm : process (clk) begin
@@ -187,9 +228,9 @@ begin
 
               -- Shift and store the upper bytes of the partial beat for the
               -- next output beat.
-              partial_tkeep <= std_ulogic_vector(shift_right(unsigned(pipe0_axis.tkeep), remain_cnt));
-              partial_tdata <= std_ulogic_vector(shift_right(unsigned(pipe0_axis.tdata), remain_cnt * DBW));
-              partial_tuser <= std_ulogic_vector(shift_right(unsigned(pipe0_axis.tuser), remain_cnt * UBW));
+              shft_tkeep <= std_ulogic_vector(shift_right(unsigned(pipe0_axis.tkeep), remain_cnt));
+              shft_tdata <= shft_tdata_arr(remain_cnt);
+              shft_tuser <= shft_tuser_arr(remain_cnt);
 
               state <= ST_PARTIAL;
             end if;
@@ -201,9 +242,9 @@ begin
             -- We already know that int0_axis.tvalid is high here because
             -- it was set by the prev state, so no need to check for it.
             int0_axis.tvalid  <= '1';
-            int0_axis.tkeep   <= partial_tkeep;
-            int0_axis.tdata   <= partial_tdata;
-            int0_axis.tuser   <= partial_tuser;
+            int0_axis.tkeep   <= shft_tkeep;
+            int0_axis.tdata   <= shft_tdata;
+            int0_axis.tuser   <= shft_tuser;
             int0_axis_tid     <= "1";
             --
             if partial_tlast then

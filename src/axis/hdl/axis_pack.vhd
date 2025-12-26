@@ -3,7 +3,8 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---!
+--! TODO: Remove extra pipe option, Synthesis performance tests show that this
+--! does not affect the crit path.
 --##############################################################################
 
 library ieee;
@@ -13,6 +14,9 @@ use work.util_pkg.all;
 use work.axis_pkg.all;
 
 entity axis_pack is
+  generic (
+    G_EXTRA_PIPE : boolean := false
+  );
   port (
     clk    : in    std_ulogic;
     srst   : in    std_ulogic;
@@ -88,39 +92,59 @@ begin
   end process;
 
   -- ---------------------------------------------------------------------------
-  s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
   pipe0_axis.tready <= (pipe1_axis_reg.tready or not pipe1_axis_reg.tvalid) and
                        to_sl((state_reg = ST_PACK));
 
   -- ---------------------------------------------------------------------------
-  -- Pre-calculate pipe0_axis_cnt for better timing
-  prc_pipe0 : process (clk) begin
-    if rising_edge(clk) then
-      if s_axis.tvalid and s_axis.tready then
-        pipe0_axis.tvalid   <= '1';
-        pipe0_axis.tlast    <= s_axis.tlast;
-        pipe0_axis.tdata    <= s_axis.tdata;
-        pipe0_axis.tkeep    <= s_axis.tkeep;
-        pipe0_axis.tuser    <= s_axis.tuser;
-        --
-        pipe0_axis_cnt   <= cnt_ones_contig(s_axis.tkeep);
-      elsif pipe0_axis.tready then
-        pipe0_axis.tvalid <= '0';
-      end if;
+  -- Pre-calculate pipe0_axis_cnt for better timing. This reduces the crit path
+  -- by about 1.5 ns / 2 logic levels on an Artix 7  when tkeep width is set
+  -- to 8. This will add more of noticable improvement as tkeep gets larger
+  -- This comes at the cost of extra registers and an additional cycle of
+  -- latency, so only include it if its really necessary.
+  gen_pipe0 : if G_EXTRA_PIPE generate
 
-      if srst then
-        pipe0_axis.tvalid <= '0';
+    s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
+
+    prc_pipe0 : process (clk) begin
+      if rising_edge(clk) then
+        if s_axis.tvalid and s_axis.tready then
+          pipe0_axis.tvalid   <= '1';
+          pipe0_axis.tlast    <= s_axis.tlast;
+          pipe0_axis.tdata    <= s_axis.tdata;
+          pipe0_axis.tkeep    <= s_axis.tkeep;
+          pipe0_axis.tuser    <= s_axis.tuser;
+          --
+          pipe0_axis_cnt <= cnt_ones_contig(s_axis.tkeep);
+        elsif pipe0_axis.tready then
+          pipe0_axis.tvalid <= '0';
+        end if;
+
+        if srst then
+          pipe0_axis.tvalid <= '0';
+        end if;
       end if;
-    end if;
-  end process;
+    end process;
+
+  else generate
+
+    s_axis.tready <= pipe0_axis.tready;
+
+    pipe0_axis.tvalid   <= s_axis.tvalid;
+    pipe0_axis.tlast    <= s_axis.tlast;
+    pipe0_axis.tdata    <= s_axis.tdata;
+    pipe0_axis.tkeep    <= s_axis.tkeep;
+    pipe0_axis.tuser    <= s_axis.tuser;
+    pipe0_axis_cnt      <= cnt_ones_contig(s_axis.tkeep);
+
+  end generate;
 
   -- ---------------------------------------------------------------------------
   prc_fsm_comb : process (all) begin
     pipe1_axis_nxt.tvalid <= pipe1_axis_reg.tvalid;
-    pipe1_axis_nxt.tlast  <= pipe1_axis_reg.tlast ;
-    pipe1_axis_nxt.tkeep(pipe1_axis_nxt.tkeep'range)  <= pipe1_axis_reg.tkeep(pipe1_axis_nxt.tkeep'range) ;
-    pipe1_axis_nxt.tdata(pipe1_axis_nxt.tdata'range)  <= pipe1_axis_reg.tdata(pipe1_axis_nxt.tdata'range) ;
-    pipe1_axis_nxt.tuser(pipe1_axis_nxt.tuser'range)  <= pipe1_axis_reg.tuser(pipe1_axis_nxt.tuser'range) ;
+    pipe1_axis_nxt.tlast  <= pipe1_axis_reg.tlast;
+    pipe1_axis_nxt.tkeep  <= pipe1_axis_reg.tkeep;
+    pipe1_axis_nxt.tdata  <= pipe1_axis_reg.tdata;
+    pipe1_axis_nxt.tuser  <= pipe1_axis_reg.tuser;
     --
     offset_nxt <= offset_reg;
     state_nxt <= state_reg;

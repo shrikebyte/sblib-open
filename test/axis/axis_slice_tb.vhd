@@ -36,7 +36,7 @@ architecture tb of axis_slice_tb is
   constant CLK_PERIOD  : time     := 5 ns;
   constant NUM_OUTPUTS : integer  := 2;
   constant KW          : integer  := 4;
-  constant DW          : integer  := 32;
+  constant DW          : integer  := 64;
   constant UW          : integer  := 32;
   constant DBW         : integer  := DW / KW;
   constant UBW         : integer  := UW / KW;

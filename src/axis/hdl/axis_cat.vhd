@@ -6,6 +6,8 @@
 --! AXI-Stream concatenate.
 --! Packets are concatenated, in order, from lowest subordinate index up to
 --! highest.
+--! TODO: remove pipe and packer options. I think it's cleaner to let the
+--! user manually instantiate these externally if needed.
 --##############################################################################
 
 library ieee;
