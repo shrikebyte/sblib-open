@@ -201,7 +201,7 @@ begin
     generic map(
       G_REF_DATA_QUEUE => REF_DATA_QUEUES(i),
       G_REF_USER_QUEUE => REF_USER_QUEUES(i),
-      G_STALL_CONFIG => STALL_CFG
+      G_STALL_CONFIG   => STALL_CFG
     )
     port map(
       clk => clk,

@@ -31,51 +31,69 @@ end entity;
 architecture rtl of axis_mux is
 
   type state_t is (ST_UNLOCKED, ST_LOCKED);
-  signal state : state_t;
+  signal state_nxt : state_t;
+  signal state_reg : state_t;
+  signal sel_nxt : integer range s_axis'range;
   signal sel_reg : integer range s_axis'range;
 
 begin
 
   -- ---------------------------------------------------------------------------
-  prc_select : process(clk) begin
-    if rising_edge(clk) then
+  prc_select_comb : process(all) begin
+    sel_nxt <= sel_reg;
+    state_nxt <= state_reg;
 
-      if m_axis.tready then
-        m_axis.tvalid <= '0';
-      end if;
-
-      case state is
-        when ST_UNLOCKED =>
+    case state_reg is
+      when ST_UNLOCKED =>
+        if s_axis(sel).tvalid then
+          sel_nxt <= sel;
+          state_nxt <= ST_LOCKED;
+        end if;
+      when ST_LOCKED =>
+        if m_axis.tvalid and m_axis.tready and m_axis.tlast then
           if s_axis(sel).tvalid then
-            sel_reg <= sel;
-            state <= ST_LOCKED;
+            sel_nxt <= sel;
+          else
+            state_nxt <= ST_UNLOCKED;
           end if;
+        end if;
+    end case;
+  end process;
 
-        when ST_LOCKED =>
-          if s_axis(sel_reg).tvalid and s_axis(sel_reg).tready then
-            m_axis.tvalid <= '1';
-            m_axis.tlast  <= s_axis(sel_reg).tlast;
-            m_axis.tdata  <= s_axis(sel_reg).tdata;
-            m_axis.tkeep  <= s_axis(sel_reg).tkeep;
-            m_axis.tuser  <= s_axis(sel_reg).tuser;
-
-            if s_axis(sel_reg).tlast then
-              state <= ST_UNLOCKED;
-            end if;
-          end if;
-      end case;
+  prc_select_ff : process(clk) begin
+    if rising_edge(clk) then
+      sel_reg <= sel_nxt;
+      state_reg <= state_nxt;
 
       if srst then
-        m_axis.tvalid <= '0';
-        sel_reg <= s_axis'low;
-        state  <= ST_UNLOCKED;
+        sel_reg    <= s_axis'low;
+        state_reg  <= ST_UNLOCKED;
       end if;
     end if;
   end process;
 
   -- ---------------------------------------------------------------------------
   gen_assign_s_axis_tready : for i in s_axis'range generate
-    s_axis(i).tready <= (m_axis.tready or not m_axis.tvalid) and to_sl((state = ST_LOCKED) and (sel_reg = i));
+    s_axis(i).tready <= (m_axis.tready or not m_axis.tvalid) and
+                         to_sl((sel_nxt = i));
   end generate;
+
+  prc_output_ff : process(clk) begin
+    if rising_edge(clk) then
+      if s_axis(sel_nxt).tvalid and s_axis(sel_nxt).tready then
+        m_axis.tvalid <= '1';
+        m_axis.tlast  <= s_axis(sel_nxt).tlast;
+        m_axis.tdata  <= s_axis(sel_nxt).tdata;
+        m_axis.tkeep  <= s_axis(sel_nxt).tkeep;
+        m_axis.tuser  <= s_axis(sel_nxt).tuser;
+      elsif m_axis.tready then
+        m_axis.tvalid <= '0';
+      end if;
+
+      if srst then
+        m_axis.tvalid <= '0';
+      end if;
+    end if;
+  end process;
 
 end architecture;

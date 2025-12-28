@@ -69,20 +69,15 @@ architecture tb of axis_demux_tb is
     max_stall_cycles  => 3
   );
 
-  signal bfm_axis : axis_t (
-    tdata(DW-1 downto 0),
-    tkeep(KW-1 downto 0),
-    tuser(UW-1 downto 0)
-  );
-
+  constant SEL_QUEUE : queue_t := new_queue;
   constant DATA_QUEUE : queue_t := new_queue;
   constant USER_QUEUE : queue_t := new_queue;
-  constant REF_DATA_QUEUE : queue_t := new_queue;
-  constant REF_USER_QUEUE : queue_t := new_queue;
+  constant REF_DATA_QUEUES  : queue_vec_t(m_axis'range) :=
+    get_new_queues(m_axis'length);
+  constant REF_USER_QUEUES : queue_vec_t(m_axis'range) :=
+    get_new_queues(m_axis'length);
 
-  signal num_packets_checked : natural := 0;
-
-  signal m_axis_tvalid : std_ulogic_vector(m_axis'range);
+  signal num_packets_checked : nat_arr_t(m_axis'range)  := (others => 0);
 
 begin
 
@@ -91,11 +86,12 @@ begin
   prc_main : process is
 
     variable rnd : randomptype;
-    variable num_tests : natural := 0;
+    variable num_tests : nat_arr_t(m_axis'range)  := (others => 0);
 
     procedure send_random is
 
       constant PACKET_LENGTH_BYTES : natural := rnd.Uniform(1, 5 * KW);
+      constant OUTPUT_IDX : natural := rnd.Uniform(m_axis'low, m_axis'high);
 
       variable data      : integer_array_t := null_integer_array;
       variable data_copy : integer_array_t := null_integer_array;
@@ -104,7 +100,8 @@ begin
 
     begin
 
-      -- Random test data packet
+
+      -- Random data packet
       random_integer_array (
         rnd           => rnd,
         integer_array => data,
@@ -114,9 +111,9 @@ begin
       );
       data_copy := copy(data);
       push_ref(DATA_QUEUE, data);
-      push_ref(REF_DATA_QUEUE, data_copy);
+      push_ref(REF_DATA_QUEUES(OUTPUT_IDX), data_copy);
 
-      -- Random user data packet
+      -- Random user packet
       random_integer_array (
         rnd           => rnd,
         integer_array => user,
@@ -126,9 +123,11 @@ begin
       );
       user_copy := copy(user);
       push_ref(USER_QUEUE, user);
-      push_ref(REF_USER_QUEUE, user_copy);
+      push_ref(REF_USER_QUEUES(OUTPUT_IDX), user_copy);
 
-      num_tests := num_tests + 1;
+      push(SEL_QUEUE, OUTPUT_IDX);
+
+      num_tests(OUTPUT_IDX) := num_tests(OUTPUT_IDX) + 1;
 
     end procedure;
 
@@ -184,56 +183,30 @@ begin
     m_axis => s_axis
   );
 
-  u_bfm_axis_sub : entity work.bfm_axis_sub
-  generic map(
-    G_REF_DATA_QUEUE => REF_DATA_QUEUE,
-    G_REF_USER_QUEUE => REF_USER_QUEUE,
-    G_STALL_CONFIG   => STALL_CFG
-  )
-  port map(
-    clk    => clk,
-    s_axis => bfm_axis,
-    num_packets_checked => num_packets_checked
-  );
-
-  -- ---------------------------------------------------------------------------
-  -- Squish the output streams into one input stream for the checker.
-  -- We know that that module will only assert one of the valid channels at a
-  -- time, so this will work.
-  prc_assign_handshake : process(all) begin
-
-    bfm_axis.tvalid <= or m_axis_tvalid;
-    bfm_axis.tlast  <= 'X';
-    bfm_axis.tdata  <= (others => 'X');
-    bfm_axis.tkeep  <= (others => 'X');
-    bfm_axis.tuser  <= (others => 'X');
-
-    for i in m_axis'range loop
-      if m_axis(i).tvalid then
-        bfm_axis.tlast <= m_axis(i).tlast;
-        bfm_axis.tdata <= m_axis(i).tdata;
-        bfm_axis.tkeep <= m_axis(i).tkeep;
-        bfm_axis.tuser <= m_axis(i).tuser;
-      end if;
-    end loop;
-  end process;
-
-  gen_m_axis_tb : for i in m_axis'range generate
-    m_axis_tvalid(i) <= m_axis(i).tvalid;
-    m_axis(i).tready <= bfm_axis.tready;
+  gen_sub_bfms : for i in m_axis'range generate
+    u_bfm_axis_sub : entity work.bfm_axis_sub
+    generic map(
+      G_REF_DATA_QUEUE => REF_DATA_QUEUES(i),
+      G_REF_USER_QUEUE => REF_USER_QUEUES(i),
+      G_STALL_CONFIG   => STALL_CFG
+    )
+    port map (
+      clk    => clk,
+      s_axis => m_axis(i),
+      num_packets_checked => num_packets_checked(i)
+    );
   end generate;
 
-  -- Use randomly changing values for select
-  prc_sel_tb : process
-    variable rnd : RandomPType;
-  begin
-    rnd.InitSeed(get_string_seed(runner_cfg));
 
-    while true loop
+  -- ---------------------------------------------------------------------------
+  prc_select : process is begin
+    while is_empty(SEL_QUEUE) loop
       wait until rising_edge(clk);
-      sel <= rnd.Uniform(m_axis'low, m_axis'high);
     end loop;
-
+    sel <= pop(SEL_QUEUE);
+    wait until (s_axis.tvalid and s_axis.tready and s_axis.tlast) = '1'
+      and rising_edge(clk);
   end process;
+
 
 end architecture;

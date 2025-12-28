@@ -296,8 +296,7 @@ begin
   end generate;
 
   -- ---------------------------------------------------------------------------
-  prc_num_bytes : process is
-  begin
+  prc_num_bytes : process is begin
     while is_empty(NUM_BYTES_QUEUE) loop
       wait until rising_edge(clk);
     end loop;
