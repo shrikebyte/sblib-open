@@ -4,6 +4,15 @@
 --# Lang : VHDL'19
 --# ============================================================================
 --! AXI-Stream de-multiplexer.
+--! The `sel` select input can be changed at any time. The de-mux "locks on" to
+--! a packet when the input channel's tvalid is high at the same time as it's
+--! `sel` is selected. The demux releases a channel after the tlast beat.
+--! This module inserts one bubble cycle per packet, as this is the design that
+--! uses the most reasonable tradeoff between the competing variables of
+--! latency, utilization, and combinatorial loading on s_axis.tready. For large
+--! packets, this will essentially be neglegible and for packets sized one beat,
+--! the best possible thruput of this module is 50%.
+--! TODO: Consider adding an alternate implementation with no bubble cycles.
 --##############################################################################
 
 library ieee;
@@ -21,95 +30,72 @@ entity axis_demux is
     --
     m_axis : view (m_axis_v) of axis_arr_t;
     --! Output select
-    sel    : in integer range m_axis'range;
+    sel : in integer range m_axis'range;
   );
 end entity;
 
 architecture rtl of axis_demux is
 
   type state_t is (ST_UNLOCKED, ST_LOCKED);
-  signal state_reg : state_t;
-  signal state_nxt : state_t;
+  signal state : state_t;
   signal sel_reg : integer range m_axis'range;
-  signal sel_nxt : integer range m_axis'range;
+  signal oe : std_ulogic;
 
-  signal int_axis : axis_t (
-    tdata(s_axis.tdata'range),
-    tkeep(s_axis.tkeep'range),
-    tuser(s_axis.tuser'range)
-  );
+  signal int_axis_tvalid : std_ulogic_vector(m_axis'range);
+  signal int_axis_tdata  : std_ulogic_vector(s_axis.tdata'range);
+  signal int_axis_tuser  : std_ulogic_vector(s_axis.tuser'range);
+  signal int_axis_tkeep  : std_ulogic_vector(s_axis.tkeep'range);
+  signal int_axis_tlast  : std_ulogic;
 
 begin
 
   -- ---------------------------------------------------------------------------
-  prc_select_comb : process(all) begin
-    sel_nxt <= sel_reg;
-    state_nxt <= state_reg;
-
-    case state_reg is
-      when ST_UNLOCKED =>
-        if s_axis.tvalid then
-          sel_nxt <= sel;
-          state_nxt <= ST_LOCKED;
-        end if;
-      when ST_LOCKED =>
-        if m_axis(sel_reg).tvalid and
-            m_axis(sel_reg).tready and
-            m_axis(sel_reg).tlast then
-          if s_axis.tvalid then
-            sel_nxt <= sel;
-          else
-            state_nxt <= ST_UNLOCKED;
-          end if;
-        end if;
-    end case;
-  end process;
-
-  prc_select_ff : process(clk) begin
-    if rising_edge(clk) then
-      sel_reg <= sel_nxt;
-      state_reg <= state_nxt;
-
-      if srst then
-        sel_reg    <= m_axis'low;
-        state_reg  <= ST_UNLOCKED;
-      end if;
-    end if;
-  end process;
+  oe <= m_axis(sel_reg).tready or not m_axis(sel_reg).tvalid;
+  s_axis.tready <= oe and to_sl(state = ST_LOCKED);
 
   -- ---------------------------------------------------------------------------
-  prc_out_reg : process (clk) begin
+  prc_select : process(clk) begin
     if rising_edge(clk) then
-      if s_axis.tvalid and s_axis.tready then
-        int_axis.tlast <= s_axis.tlast;
-        int_axis.tdata <= s_axis.tdata;
-        int_axis.tkeep <= s_axis.tkeep;
-        int_axis.tuser <= s_axis.tuser;
+
+      if m_axis(sel_reg).tready then
+        int_axis_tvalid(sel_reg) <= '0';
+      end if;
+
+      case state is
+        when ST_UNLOCKED =>
+          if s_axis.tvalid and oe then
+            sel_reg <= sel;
+            state <= ST_LOCKED;
+          end if;
+
+        when ST_LOCKED =>
+          if s_axis.tvalid and oe then
+            int_axis_tvalid(sel_reg) <= '1';
+            int_axis_tlast <= s_axis.tlast;
+            int_axis_tdata <= s_axis.tdata;
+            int_axis_tkeep <= s_axis.tkeep;
+            int_axis_tuser <= s_axis.tuser;
+
+            if s_axis.tlast then
+              state <= ST_UNLOCKED;
+            end if;
+          end if;
+      end case;
+
+      if srst then
+        int_axis_tvalid <= (others=>'0');
+        sel_reg <= m_axis'low;
+        state  <= ST_UNLOCKED;
       end if;
     end if;
   end process;
 
   gen_assign_m_axis : for i in m_axis'range generate
-    prc_out_sel : process (clk) begin
-      if rising_edge(clk) then
-        if s_axis.tvalid and s_axis.tready and to_sl((sel_nxt = i)) then
-          m_axis(i).tvalid <= '1';
-        elsif m_axis(i).tready then
-          m_axis(i).tvalid <= '0';
-        end if;
-        if srst then
-          m_axis(i).tvalid <= '0';
-        end if;
-      end if;
-    end process;
-
-    m_axis(i).tlast <= int_axis.tlast;
-    m_axis(i).tdata <= int_axis.tdata;
-    m_axis(i).tkeep <= int_axis.tkeep;
-    m_axis(i).tuser <= int_axis.tuser;
-
+    m_axis(i).tvalid <= int_axis_tvalid(i);
+    m_axis(i).tlast  <= int_axis_tlast;
+    m_axis(i).tdata  <= int_axis_tdata;
+    m_axis(i).tkeep  <= int_axis_tkeep;
+    m_axis(i).tuser  <= int_axis_tuser;
   end generate;
-
-  s_axis.tready <= m_axis(sel_reg).tready or not m_axis(sel_reg).tvalid;
 
 end architecture;

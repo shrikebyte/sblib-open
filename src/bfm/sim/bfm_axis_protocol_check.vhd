@@ -97,7 +97,7 @@ begin
 
     -- -------------------------------------------------------------------------
     prc_tready_well_defined_check : process begin
-      wait until rising_edge(clk); 
+      wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
       assert is_01(mon_axis.tready) report error_message;
@@ -147,7 +147,7 @@ begin
 
     -- Nothing on the bus may change while 'valid' is asserted, unless there is
     -- a transaction (i.e. 'ready and valid' is true at a rising edge).
-    bus_must_be_same_as_previous <= 
+    bus_must_be_same_as_previous <=
       mon_axis.tvalid and tvalid_ff and not tready_ff;
 
   end block;
@@ -197,7 +197,7 @@ begin
 
   -- ---------------------------------------------------------------------------
   gen_tkeep : if KW > 0 generate
-    constant unstable_error_message : string := 
+    constant unstable_error_message : string :=
       get_unstable_error_message("tkeep");
     constant undefined_error_message : string := (
       BASE_ERROR_MESSAGE & "'tkeep' has undefined value while bus is 'valid'."
@@ -227,7 +227,7 @@ begin
 
   -- ---------------------------------------------------------------------------
   gen_tuser : if UW > 0 generate
-    constant error_message : string := get_unstable_error_message("user");
+    constant error_message : string := get_unstable_error_message("tuser");
     signal tuser_ff : std_ulogic_vector(mon_axis.tuser'range) := (others => '0');
   begin
 
