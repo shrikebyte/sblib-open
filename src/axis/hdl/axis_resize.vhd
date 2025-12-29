@@ -12,6 +12,7 @@
 --! logic utilization.
 --! This has a comb tready path. Insert an axi stream pipeline stage before
 --! the input of this module, if needed to improve timing.
+--! TODO: Change upsizer so that it will pack sparse tkeep inputs.
 --##############################################################################
 
 library ieee;
@@ -182,16 +183,13 @@ begin
     prc_upsize : process (clk) begin
       if rising_edge(clk) then
         if s_axis.tvalid and s_axis.tready then
-          -- New narrow beat at input
+          -- New narrow input beat
 
           if cnt = 0 then
-            -- If first narrow input beat of a new wide output beat, copy
-            -- narrow tkeep to the lsbs of wide tkeep and set the msbs to 0
-            m_axis.tkeep(s_axis.tkeep'high downto s_axis.tkeep'low)      <= s_axis.tkeep;
-            m_axis.tkeep(m_axis.tkeep'high downto s_axis.tkeep'high + 1) <= (others=>'0');
-          else
-            m_axis.tkeep(cnt * S_KW + S_KW - 1 downto cnt * S_KW) <= s_axis.tkeep;
+            -- First narrow input beat of wide output beat
+            m_axis.tkeep <= (others=>'0');
           end if;
+          m_axis.tkeep(cnt * S_KW + S_KW - 1 downto cnt * S_KW) <= s_axis.tkeep;
           m_axis.tdata(cnt * S_DW + S_DW - 1 downto cnt * S_DW) <= s_axis.tdata;
           m_axis.tuser(cnt * S_UW + S_UW - 1 downto cnt * S_UW) <= s_axis.tuser;
           m_axis.tlast <= s_axis.tlast;
