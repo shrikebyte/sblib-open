@@ -12,7 +12,6 @@
 --! logic utilization.
 --! This has a comb tready path. Insert an axi stream pipeline stage before
 --! the input of this module, if needed to improve timing.
---! TODO: Change upsizer so that it will pack sparse tkeep inputs.
 --##############################################################################
 
 library ieee;
@@ -44,6 +43,8 @@ architecture rtl of axis_resize is
   constant M_UW  : integer := m_axis.tuser'length;
   constant M_DBW : integer := M_DW / M_KW;
   constant M_UBW : integer := M_UW / M_KW;
+  constant DBW : integer   := S_DBW;
+  constant UBW : integer   := S_UBW;
 
 begin
 
@@ -127,7 +128,6 @@ begin
     keep_reg_shft <= std_ulogic_vector(shift_right(u_unsigned(keep_reg), M_KW));
     last_reg_shft <= std_ulogic_vector(shift_right(u_unsigned(last_reg), 1));
     keep_reg_shft_is_zero <= and (not keep_reg_shft);
-
     tkeep_contracted <= contract_bits(s_axis.tkeep, M_KW);
 
     prc_downsize : process (clk) begin
@@ -174,8 +174,8 @@ begin
   -- ---------------------------------------------------------------------------
   -- Upsize mode
   else generate
-    constant CNT_MAX : integer := (M_DW / S_DW) - 1;
-    signal cnt : integer range 0 to CNT_MAX;
+    constant CNT_MAX : integer := (M_KW - S_KW) - 1;
+    signal offset : integer range 0 to M_KW - 1;
   begin
 
     s_axis.tready <= m_axis.tready or not m_axis.tvalid;
@@ -185,21 +185,22 @@ begin
         if s_axis.tvalid and s_axis.tready then
           -- New narrow input beat
 
-          if cnt = 0 then
+          if offset = 0 then
             -- First narrow input beat of wide output beat
             m_axis.tkeep <= (others=>'0');
           end if;
-          m_axis.tkeep(cnt * S_KW + S_KW - 1 downto cnt * S_KW) <= s_axis.tkeep;
-          m_axis.tdata(cnt * S_DW + S_DW - 1 downto cnt * S_DW) <= s_axis.tdata;
-          m_axis.tuser(cnt * S_UW + S_UW - 1 downto cnt * S_UW) <= s_axis.tuser;
+
+          m_axis.tkeep(offset + S_KW - 1 downto offset) <= s_axis.tkeep;
+          m_axis.tdata((offset * DBW) + S_DW - 1 downto (offset * DBW)) <= s_axis.tdata;
+          m_axis.tuser((offset * UBW) + S_UW - 1 downto (offset * UBW)) <= s_axis.tuser;
           m_axis.tlast <= s_axis.tlast;
 
-          if cnt = CNT_MAX or s_axis.tlast = '1' then
+          if offset > CNT_MAX or s_axis.tlast = '1' then
             m_axis.tvalid <= '1';
-            cnt <= 0;
+            offset <= 0;
           else
             m_axis.tvalid <= '0';
-            cnt <= cnt + 1;
+            offset <= offset + cnt_ones_contig(s_axis.tkeep);
           end if;
 
         elsif m_axis.tready then
@@ -208,7 +209,7 @@ begin
 
         if srst then
           m_axis.tvalid <= '0';
-          cnt <= 0;
+          offset <= 0;
         end if;
       end if;
     end process;

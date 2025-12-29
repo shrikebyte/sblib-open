@@ -81,11 +81,26 @@ architecture rtl of axis_slice is
     tuser(s_axis.tuser'range)
   );
 
-  --signal shft_tkeep_arr : slv_arr_t(0 to KW - 1)(DW - 1 downto 0);
   signal shft_tdata_arr : slv_arr_t(1 to KW - 1)(DW - 1 downto 0);
   signal shft_tuser_arr : slv_arr_t(1 to KW - 1)(UW - 1 downto 0);
 
 begin
+
+  -- ---------------------------------------------------------------------------
+  prc_assert : process (clk) begin
+    if rising_edge(clk) then
+      assert not (s_axis.tvalid = '1' and s_axis.tlast = '1' and
+        (nor s_axis.tkeep) = '1')
+        report "axis_slice: Null tlast beat detected on input. At " &
+          "least one tkeep bit must be set on tlast."
+        severity error;
+
+      assert not (s_axis.tvalid = '1' and not is_contig(s_axis.tkeep))
+        report "axis_slice: Non-contiguous tkeep detected on input. tkeep " &
+          "must be contiguous (e.g., 0001, 0011, 0111, but not 0101 or 0100)."
+        severity error;
+    end if;
+  end process;
 
   -- ---------------------------------------------------------------------------
   pipe0_axis.tready <= (int0_axis.tready or not int0_axis.tvalid) and
@@ -93,7 +108,7 @@ begin
 
   -- ---------------------------------------------------------------------------
   -- Pre-calculate pipe0_axis_cnt for better timing. This reduces the crit path
-  -- by about 1.5 ns / 2 logic levels on an Artix 7  when tkeep width is set
+  -- by about 1.5 ns / 2 logic levels on an Artix 7 when tkeep width is set
   -- to 8. This will add more of noticable improvement as tkeep gets larger
   -- This comes at the cost of extra registers and an additional cycle of
   -- latency, so only include it if its really necessary.
@@ -141,7 +156,7 @@ begin
   -- mux to select the final shifted output rather than using a general barrel
   -- shifter. A mux has a shallower logic depth than a barrel shifter so this
   -- improves timing. A general barrel shifter is not needed here because we
-  -- know the DBW and UBW shift ammounts at compile-time.
+  -- know the DBW and UBW shift amounts at compile-time.
   -- By virtue of how the FSM works, we also know that the shift amount will
   -- never be 0 or KW, so we can skip computing these to save some LUTs.
   gen_shift_mux : for i in 1 to KW - 1 generate
