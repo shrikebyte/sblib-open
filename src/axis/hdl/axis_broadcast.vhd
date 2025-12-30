@@ -3,7 +3,7 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXI-Stream Broadcast. Duplicate one input stream to several output streams.
+--# Broadcasts one input stream to several output streams.
 --##############################################################################
 
 library ieee;
@@ -38,11 +38,13 @@ architecture rtl of axis_broadcast is
     tkeep(s_axis.tkeep'range),
     tuser(s_axis.tuser'range)
   );
-  
+
 begin
 
+  -- ---------------------------------------------------------------------------
   s_axis.tready <= and int0_axis_tready;
 
+  -- ---------------------------------------------------------------------------
   gen_broadcast : for i in m_axis'range generate
 
     int0_axis_tready(i) <= int0_axis(i).tready;

@@ -49,9 +49,6 @@ architecture tb of axis_resize_tb is
   constant M_KW         : integer := G_M_KW;
   constant M_DW         : integer := G_M_DW;
   constant M_UW         : integer := G_M_UW;
-  constant M_DBW        : integer := M_DW / M_KW;
-  constant M_UBW        : integer := M_UW / M_KW;
-
 
   -- TB Signals
   signal clk   : std_ulogic := '1';
@@ -178,10 +175,10 @@ begin
 
   u_bfm_axis_man : entity work.bfm_axis_man
   generic map(
-    G_DATA_QUEUE   => DATA_QUEUE,
-    G_USER_QUEUE   => USER_QUEUE,
-    G_STALL_CONFIG => STALL_CFG,
-    G_PACKED_STREAM => G_PACKED_STREAM
+    G_DATA_QUEUE    => DATA_QUEUE,
+    G_USER_QUEUE    => USER_QUEUE,
+    G_PACKED_STREAM => G_PACKED_STREAM,
+    G_STALL_CONFIG  => STALL_CFG
   )
   port map(
     clk    => clk,
@@ -192,6 +189,7 @@ begin
   generic map(
     G_REF_DATA_QUEUE => REF_DATA_QUEUE,
     G_REF_USER_QUEUE => REF_USER_QUEUE,
+    G_PACKED_STREAM  => G_PACKED_STREAM,
     G_STALL_CONFIG   => STALL_CFG
   )
   port map(

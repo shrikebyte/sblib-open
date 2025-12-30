@@ -3,15 +3,24 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXI-Stream resizer.
---! Like most other axi stream IP, this only works properly if tkeep is
---! high on all beats except for tlast, and on tlast, upper tkeep bits should
---! be zero and lower bits should be 1.
---! When upsizing, data width, keep width, and user width should all be
---! powers of 2. Otherwise, multiplies will be inferred, greatly increasing
---! logic utilization.
---! This has a comb tready path. Insert an axi stream pipeline stage before
---! the input of this module, if needed to improve timing.
+--# Downsizes or upsizes a stream width.
+--#
+--# This module has a few tkeep restrictions:
+--#   1. Input tkeep bits must be contiguous from low to high. For example:
+--#      0000, 0001, 0011, 0111, and 1111 are allowed, but 1010 or 0100 are not
+--#      allowed.
+--#   2. On a tlast beat, at least one tkeep bit must be set.
+--#
+--# Downsize mode:
+--#   In this mode, one input beat results in multiple output beats.
+--#
+--# Upsize mode:
+--#   In this mode, several input beats result in one output beat.
+--#
+--# Packed input streams always result in a packed output stream.
+--# Unpacked input streams may result in an unpacked output stream.
+--# Output tkeep bits will alwyas be contiguous, so long as the input rules are
+--# followed.
 --##############################################################################
 
 library ieee;
@@ -174,11 +183,21 @@ begin
   -- ---------------------------------------------------------------------------
   -- Upsize mode
   else generate
-    constant CNT_MAX : integer := (M_KW - S_KW) - 1;
-    signal offset : integer range 0 to M_KW - 1;
+    constant CNT_MAX : natural := M_KW - S_KW;
+    signal offset : natural range 0 to M_KW - 1;
+    signal offset_plus_current_cnt : natural range 0 to M_KW;
   begin
 
+    assert is_pwr2(DBW)
+      report "axis_resize (upsize): Data byte width must be a power of 2."
+      severity error;
+
+    assert is_pwr2(UBW)
+      report "axis_resize (upsize): User byte width must be a power of 2."
+      severity error;
+
     s_axis.tready <= m_axis.tready or not m_axis.tvalid;
+    offset_plus_current_cnt <= offset + cnt_ones_contig(s_axis.tkeep);
 
     prc_upsize : process (clk) begin
       if rising_edge(clk) then
@@ -195,12 +214,12 @@ begin
           m_axis.tuser((offset * UBW) + S_UW - 1 downto (offset * UBW)) <= s_axis.tuser;
           m_axis.tlast <= s_axis.tlast;
 
-          if offset > CNT_MAX or s_axis.tlast = '1' then
+          if offset_plus_current_cnt > CNT_MAX or s_axis.tlast = '1' then
             m_axis.tvalid <= '1';
             offset <= 0;
           else
             m_axis.tvalid <= '0';
-            offset <= offset + cnt_ones_contig(s_axis.tkeep);
+            offset <= offset_plus_current_cnt;
           end if;
 
         elsif m_axis.tready then

@@ -3,12 +3,14 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXI-Stream arbiter.
---! Simple, fixed-priority, packet arbiter. Higher subordinate channel numbers
---! have higher priority.
---! NOTICE: Since this is fixed-priority, if a higher channel is sending data
---! every clock cycle, it is possible for it to hog all of the bandwidth,
---! preventing lower channels from ever sending data.
+--# Arbitrates packets with simple, fixed-priority. Higher subordinate
+--# channel numbers have higher priority.
+--#
+--# NOTICE: Since this uses fixed-priority, if a higher channel holds valid high
+--# on every clock cycle, then it will hog all of the bandwidth,
+--# preventing the lower channels from ever sending data.
+--#
+--# TODO: Add round-robin arbitration.
 --##############################################################################
 
 library ieee;

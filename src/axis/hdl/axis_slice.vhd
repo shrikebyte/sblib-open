@@ -3,11 +3,15 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! Slice one input packet into several output packets
---! TODO: Potentially improve thruput by removing the tready wait at the
---! start of each new packet.
---! TODO: packer option. I think it's cleaner to let the
---! user manually instantiate these externally if needed.
+--# Slices one input packet into two output packets at a user-specified
+--# byte boundary of the input packet.
+--#
+--# NOTICE: Does not pack tkeep for unaligned slices. If this
+--# feature is needed, then instantiate `axis_pack` between the output
+--# of this module and the downstream module that requires packed tkeep.
+--#
+--# Output tkeep bits will alwyas be contiguous, so long as the input rules are
+--# followed.
 --##############################################################################
 
 library ieee;
@@ -18,8 +22,13 @@ use work.axis_pkg.all;
 
 entity axis_slice is
   generic (
+    -- Max number of bytes that can be sent out in each M0 packet
     G_MAX_M0_BYTES : positive := 2047;
-    G_PACK_OUTPUT : boolean := true;
+    -- This reduces the crit path by 3 logic levels on Artix 7
+    -- when tkeep width is set to 8. This will add more of noticeable
+    -- improvement for larger tkeep.
+    -- This comes at the cost of extra registers and an additional cycle of
+    -- latency, so only include if its really necessary. Usually, its not.
     G_EXTRA_PIPE : boolean := false
   );
   port (
@@ -61,7 +70,6 @@ architecture rtl of axis_slice is
   signal shft_tuser : std_ulogic_vector(s_axis.tuser'range);
   signal partial_tlast : std_ulogic;
   signal int0_axis_tid : u_unsigned(0 downto 0);
-  signal int1_axis_tid : u_unsigned(0 downto 0);
 
   signal pipe0_axis : axis_t (
     tdata(s_axis.tdata'range),
@@ -70,12 +78,6 @@ architecture rtl of axis_slice is
   );
 
   signal int0_axis : axis_t (
-    tdata(s_axis.tdata'range),
-    tkeep(s_axis.tkeep'range),
-    tuser(s_axis.tuser'range)
-  );
-
-  signal int1_axis : axis_t (
     tdata(s_axis.tdata'range),
     tkeep(s_axis.tkeep'range),
     tuser(s_axis.tuser'range)
@@ -107,11 +109,7 @@ begin
                        to_sl(((state = ST_TX0) or (state = ST_TX1)));
 
   -- ---------------------------------------------------------------------------
-  -- Pre-calculate pipe0_axis_cnt for better timing. This reduces the crit path
-  -- by about 1.5 ns / 2 logic levels on an Artix 7 when tkeep width is set
-  -- to 8. This will add more of noticable improvement as tkeep gets larger
-  -- This comes at the cost of extra registers and an additional cycle of
-  -- latency, so only include it if its really necessary.
+  -- Pre-calculate pipe0_axis_cnt for better timing
   gen_pipe0 : if G_EXTRA_PIPE generate
 
     s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
@@ -301,94 +299,30 @@ begin
   end process;
 
   -- ---------------------------------------------------------------------------
-  gen_packer : if G_PACK_OUTPUT generate
-
-    signal int0_tuser_tid : std_ulogic_vector(UW + (int0_axis_tid'length * KW) - 1 downto 0);
-    signal int1_tuser_tid : std_ulogic_vector(UW + (int0_axis_tid'length * KW) - 1 downto 0);
-    constant ID_UBW : natural := UBW + int0_axis_tid'length;
-
-  begin
-
-    -- Hijack the upper bits of each tuser byte to pass along the tid
-    -- information through the packer stage. The packer can have variable
-    -- latency, so the stream ID must be transported with the stream.
-    gen_tuser_sel : for i in 0 to KW - 1 generate begin
-
-      int0_tuser_tid((i * ID_UBW) + ID_UBW - 1 downto (i * ID_UBW)) <=
-        std_ulogic_vector(int0_axis_tid) &
-        int0_axis.tuser((i * UBW) + UBW - 1 downto (i * UBW));
-
-      int1_axis.tuser((i * UBW) + UBW - 1 downto (i * UBW)) <=
-        int1_tuser_tid((i * ID_UBW) + UBW - 1 downto (i * ID_UBW));
-
-    end generate;
-
-    int1_axis_tid <= u_unsigned(int1_tuser_tid(ID_UBW - 1 downto UBW));
-
-    u_axis_pack : entity work.axis_pack
-    port map(
-      clk    => clk,
-      srst   => srst,
-      --
-      s_axis.tready => int0_axis.tready,
-      s_axis.tvalid => int0_axis.tvalid,
-      s_axis.tlast  => int0_axis.tlast,
-      s_axis.tkeep  => int0_axis.tkeep,
-      s_axis.tdata  => int0_axis.tdata,
-      s_axis.tuser  => int0_tuser_tid,
-      --
-      m_axis.tready => int1_axis.tready,
-      m_axis.tvalid => int1_axis.tvalid,
-      m_axis.tlast  => int1_axis.tlast,
-      m_axis.tkeep  => int1_axis.tkeep,
-      m_axis.tdata  => int1_axis.tdata,
-      m_axis.tuser  => int1_tuser_tid
-    );
-
-  else generate
-
-    u_axis_pipe : entity work.axis_pipe
-    generic map(
-      G_READY_PIPE => false,
-      G_DATA_PIPE  => false
-    )
-    port map(
-      clk => clk,
-      srst => srst,
-      s_axis => int0_axis,
-      m_axis => int1_axis
-    );
-
-    int1_axis_tid <= int0_axis_tid;
-
-  end generate;
-
-  -- ---------------------------------------------------------------------------
   prc_out_sel : process (all) begin
 
     m0_axis.tvalid <= '0';
     m1_axis.tvalid <= '0';
-    int1_axis.tready <= '0';
+    int0_axis.tready <= '0';
 
-    if int1_axis_tid = "0" then
-      m0_axis.tvalid <= int1_axis.tvalid and int1_axis.tready;
-      int1_axis.tready <= m0_axis.tready;
+    if int0_axis_tid = "0" then
+      m0_axis.tvalid <= int0_axis.tvalid and int0_axis.tready;
+      int0_axis.tready <= m0_axis.tready;
 
-    elsif int1_axis_tid = "1" then
-      m1_axis.tvalid <= int1_axis.tvalid and int1_axis.tready;
-      int1_axis.tready <= m1_axis.tready;
+    elsif int0_axis_tid = "1" then
+      m1_axis.tvalid <= int0_axis.tvalid and int0_axis.tready;
+      int0_axis.tready <= m1_axis.tready;
     end if;
 
   end process;
 
-  m0_axis.tlast  <= int1_axis.tlast;
-  m0_axis.tkeep  <= int1_axis.tkeep;
-  m0_axis.tdata  <= int1_axis.tdata;
-  m0_axis.tuser  <= int1_axis.tuser;
-
-  m1_axis.tlast  <= int1_axis.tlast;
-  m1_axis.tkeep  <= int1_axis.tkeep;
-  m1_axis.tdata  <= int1_axis.tdata;
-  m1_axis.tuser  <= int1_axis.tuser;
+  m0_axis.tlast  <= int0_axis.tlast;
+  m0_axis.tkeep  <= int0_axis.tkeep;
+  m0_axis.tdata  <= int0_axis.tdata;
+  m0_axis.tuser  <= int0_axis.tuser;
+  m1_axis.tlast  <= int0_axis.tlast;
+  m1_axis.tkeep  <= int0_axis.tkeep;
+  m1_axis.tdata  <= int0_axis.tdata;
+  m1_axis.tuser  <= int0_axis.tuser;
 
 end architecture;

@@ -25,7 +25,8 @@ use work.bfm_pkg.all;
 entity axis_slice_tb is
   generic (
     RUNNER_CFG      : string;
-    G_ENABLE_JITTER : boolean := true
+    G_ENABLE_JITTER : boolean := true;
+    G_PACKED_STREAM : boolean := true
   );
 end entity;
 
@@ -256,8 +257,7 @@ begin
   -- ---------------------------------------------------------------------------
   u_axis_slice : entity work.axis_slice
   generic map (
-    G_MAX_M0_BYTES => MAX_M0_BYTES,
-    G_PACK_OUTPUT => true
+    G_MAX_M0_BYTES => MAX_M0_BYTES
   )
   port map (
     clk          => clk,
@@ -271,29 +271,43 @@ begin
 
   u_bfm_axis_man : entity work.bfm_axis_man
   generic map(
-    G_DATA_QUEUE   => DATA_QUEUE,
-    G_USER_QUEUE   => USER_QUEUE,
-    G_STALL_CONFIG => STALL_CFG
+    G_DATA_QUEUE    => DATA_QUEUE,
+    G_USER_QUEUE    => USER_QUEUE,
+    G_PACKED_STREAM => G_PACKED_STREAM,
+    G_STALL_CONFIG  => STALL_CFG
   )
   port map(
     clk    => clk,
     m_axis => s_axis
   );
 
-  gen_subs : for i in m_axis'range generate
-    u_bfm_axis_sub : entity work.bfm_axis_sub
-    generic map(
-      G_REF_DATA_QUEUE => REF_DATA_QUEUES(i),
-      G_REF_USER_QUEUE => REF_USER_QUEUES(i),
-      G_LOGGER_NAME_SUFFIX => to_string(i),
-      G_STALL_CONFIG   => STALL_CFG
-    )
-    port map(
-      clk    => clk,
-      s_axis => m_axis(i),
-      num_packets_checked => num_packets_checked(i)
-    );
-  end generate;
+  u_bfm_axis_sub0 : entity work.bfm_axis_sub
+  generic map(
+    G_REF_DATA_QUEUE     => REF_DATA_QUEUES(0),
+    G_REF_USER_QUEUE     => REF_USER_QUEUES(0),
+    G_LOGGER_NAME_SUFFIX => to_string(0),
+    G_PACKED_STREAM      => G_PACKED_STREAM,
+    G_STALL_CONFIG       => STALL_CFG
+  )
+  port map(
+    clk    => clk,
+    s_axis => m_axis(0),
+    num_packets_checked => num_packets_checked(0)
+  );
+
+  u_bfm_axis_sub1 : entity work.bfm_axis_sub
+  generic map(
+    G_REF_DATA_QUEUE     => REF_DATA_QUEUES(1),
+    G_REF_USER_QUEUE     => REF_USER_QUEUES(1),
+    G_LOGGER_NAME_SUFFIX => to_string(1),
+    G_PACKED_STREAM      => false, -- Always false. Second output stream not guarenteed to be packed.
+    G_STALL_CONFIG       => STALL_CFG
+  )
+  port map(
+    clk    => clk,
+    s_axis => m_axis(1),
+    num_packets_checked => num_packets_checked(1)
+  );
 
   -- ---------------------------------------------------------------------------
   prc_num_bytes : process is begin

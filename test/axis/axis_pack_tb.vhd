@@ -181,6 +181,7 @@ begin
   generic map(
     G_REF_DATA_QUEUE => REF_DATA_QUEUE,
     G_REF_USER_QUEUE => REF_USER_QUEUE,
+    G_PACKED_STREAM  => true, -- Packer output stream should always be packed
     G_STALL_CONFIG   => STALL_CFG
   )
   port map(

@@ -3,9 +3,8 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXI-Stream pipeline register. Has options to pipeline both the
---! "forward" data / valid and the "backward" ready signals.
---! Maintains full throughput without inserting bubbles.
+--# Registers the forward data and/or backward ready signals of a stream.
+--# Maintains full throughput.
 --##############################################################################
 
 library ieee;
@@ -78,11 +77,11 @@ begin
     prc_out_select : process (all) begin
       if s_axis.tready then
         -- Input is ready. Route input directly to output with zero latency.
-        int_axis.tvalid <= s_axis.tvalid; 
-        int_axis.tlast  <= s_axis.tlast; 
-        int_axis.tdata  <= s_axis.tdata; 
-        int_axis.tkeep  <= s_axis.tkeep; 
-        int_axis.tuser  <= s_axis.tuser; 
+        int_axis.tvalid <= s_axis.tvalid;
+        int_axis.tlast  <= s_axis.tlast;
+        int_axis.tdata  <= s_axis.tdata;
+        int_axis.tkeep  <= s_axis.tkeep;
+        int_axis.tuser  <= s_axis.tuser;
       else
         -- Input is not ready. Route skid buffer to output. Valid can be held
         -- at '1' here because after a skid-buffer output valid-ready combo,
@@ -99,11 +98,11 @@ begin
   else generate
 
     s_axis.tready   <= int_axis.tready;
-    int_axis.tvalid <= s_axis.tvalid; 
-    int_axis.tlast  <= s_axis.tlast; 
-    int_axis.tdata  <= s_axis.tdata; 
-    int_axis.tkeep  <= s_axis.tkeep; 
-    int_axis.tuser  <= s_axis.tuser; 
+    int_axis.tvalid <= s_axis.tvalid;
+    int_axis.tlast  <= s_axis.tlast;
+    int_axis.tdata  <= s_axis.tdata;
+    int_axis.tkeep  <= s_axis.tkeep;
+    int_axis.tuser  <= s_axis.tuser;
 
   end generate;
 
@@ -126,10 +125,10 @@ begin
         if int_axis.tvalid and int_axis.tready then
           -- If there's a new transaction accepted at the input, we also
           -- implicitly know that the output buffer is empty and ready.
-          m_axis.tvalid   <= '1'; 
-          m_axis.tlast    <= int_axis.tlast; 
-          m_axis.tdata    <= int_axis.tdata; 
-          m_axis.tkeep    <= int_axis.tkeep; 
+          m_axis.tvalid   <= '1';
+          m_axis.tlast    <= int_axis.tlast;
+          m_axis.tdata    <= int_axis.tdata;
+          m_axis.tkeep    <= int_axis.tkeep;
           m_axis.tuser    <= int_axis.tuser;
         elsif m_axis.tready then
           -- If no new transaction at the input and output is ready,
@@ -146,12 +145,12 @@ begin
   else generate
 
     int_axis.tready <= m_axis.tready;
-    m_axis.tvalid   <= int_axis.tvalid; 
-    m_axis.tlast    <= int_axis.tlast; 
-    m_axis.tdata    <= int_axis.tdata; 
-    m_axis.tkeep    <= int_axis.tkeep; 
-    m_axis.tuser    <= int_axis.tuser; 
-    
+    m_axis.tvalid   <= int_axis.tvalid;
+    m_axis.tlast    <= int_axis.tlast;
+    m_axis.tdata    <= int_axis.tdata;
+    m_axis.tkeep    <= int_axis.tkeep;
+    m_axis.tuser    <= int_axis.tuser;
+
   end generate;
 
 end architecture;

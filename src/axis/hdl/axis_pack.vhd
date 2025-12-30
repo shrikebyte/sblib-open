@@ -3,8 +3,19 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! TODO: Remove extra pipe option, Synthesis performance tests show that this
---! does not affect the crit path.
+--# Removes null bytes from a stream.
+--# This module has a few tkeep restrictions:
+--#   1. Input tkeep bits must be contiguous from low to high. For example:
+--#      0000, 0001, 0011, 0111, and 1111 are allowed, but 1010 or 0100 are not
+--#      allowed. The logic resources required to implement a general purpose
+--#      null byte remover are just way too high for practical use, and most
+--#      of the time, if the surrounding system is well-designed, then there
+--#      should never be a need to remove non-contiguous null-bytes.
+--#   2. On a tlast beat, at least one tkeep bit must be set. Supporting null
+--#      tlast would make this module more general purpose, but it would cost
+--#      an additional cycle of latency, and as with the first first
+--#      restriction, there are very few systems in practice that would need
+--#      support for this feature.
 --##############################################################################
 
 library ieee;
@@ -15,6 +26,11 @@ use work.axis_pkg.all;
 
 entity axis_pack is
   generic (
+    -- This reduces the crit path by 2 logic levels on Artix 7
+    -- when tkeep width is set to 8. This will add more of noticeable
+    -- improvement for larger tkeep.
+    -- This comes at the cost of extra registers and an additional cycle of
+    -- latency, so only include if its really necessary. Usually, its not.
     G_EXTRA_PIPE : boolean := false
   );
   port (
@@ -76,6 +92,14 @@ begin
     report "axis_pack: Keep width must be a power of 2."
     severity error;
 
+  assert is_pwr2(DBW)
+    report "axis_pack: Data byte width must be a power of 2."
+    severity error;
+
+  assert is_pwr2(UBW)
+    report "axis_pack: User byte width must be a power of 2."
+    severity error;
+
   prc_assert : process (clk) begin
     if rising_edge(clk) then
       assert not (s_axis.tvalid = '1' and s_axis.tlast = '1' and
@@ -96,11 +120,7 @@ begin
                        to_sl((state_reg = ST_PACK));
 
   -- ---------------------------------------------------------------------------
-  -- Pre-calculate pipe0_axis_cnt for better timing. This reduces the crit path
-  -- by about 1.5 ns / 2 logic levels on an Artix 7  when tkeep width is set
-  -- to 8. This will add more of noticable improvement as tkeep gets larger
-  -- This comes at the cost of extra registers and an additional cycle of
-  -- latency, so only include it if its really necessary.
+  -- Pre-calculate pipe0_axis_cnt for better timing
   gen_pipe0 : if G_EXTRA_PIPE generate
 
     s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
@@ -174,9 +194,9 @@ begin
           else
             -- Increment the buffer offset by the number of new input bytes.
             -- The offset uses natural unsigned rollover when keep width
-            -- is a power of 2. That's what the modulous operator synthesizes
+            -- is a power of 2. That's what the modulus operator synthesizes
             -- to here. Its the same thing as using an unsigned type with
-            -- automatic rollover, but using an integer is more convenient here.
+            -- automatic rollover, but using an integer is more convenient.
             offset_nxt <= (offset_reg + pipe0_axis_cnt) mod KW;
             pipe1_axis_nxt.tlast <= '0';
           end if;

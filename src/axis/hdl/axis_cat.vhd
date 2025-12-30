@@ -3,9 +3,11 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXI-Stream concatenate.
 --! Packets are concatenated, in order, from lowest subordinate index up to
 --! highest.
+--! NOTICE: Does not pack tkeep for unaligned input packets. If this
+--! feature is needed, then instantiate `axis_pack` between the output
+--! of this module and the downstream module that requires packed tkeep.
 --##############################################################################
 
 library ieee;

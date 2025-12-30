@@ -136,10 +136,25 @@ def add_configs(lib):
         )
 
     ############################################################################
+    tb = lib.test_bench("axis_slice_tb")
+
+    enable_jitter = [True]
+    packed_stream = [True, False]
+
+    for enable_jitter, packed_stream in product(enable_jitter, packed_stream):
+        sim_utils.named_config(
+            tb,
+            {
+                "G_ENABLE_JITTER": enable_jitter,
+                "G_PACKED_STREAM": packed_stream,
+            },
+        )
+
+    ############################################################################
     tb = lib.test_bench("axis_resize_tb")
 
     enable_jitter = [True]
-    packed_stream = [True]
+    packed_stream = [True, False]
 
     for enable_jitter, packed_stream in product(enable_jitter, packed_stream):
         # No change 8->8

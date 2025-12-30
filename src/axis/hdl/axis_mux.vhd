@@ -3,16 +3,17 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! AXI-Stream multiplexer.
---! The `sel` select input can be changed at any time. The mux "locks on" to
---! a packet when the input channel's tvalid is high at the same time as it's
---! `sel` is selected. The mux releases a channel after the tlast beat.
---! This module inserts one bubble cycle per packet, as this is the design that
---! uses the most reasonable tradeoff between the competing variables of
---! latency, utilization, and combinatorial loading on s_axis.tready. For large
---! packets, this will essentially be neglegible and for packets sized one beat,
---! the best possible thruput of this module is 50%.
---! TODO: Consider adding an alternate implementation with no bubble cycles.
+--# Multiplexes a stream.
+--# The `sel` select input can be changed at any time. The mux "locks on" to
+--# a packet when the input channel's tvalid is high at the same time as it's
+--# `sel` is selected. The mux releases a channel after the tlast beat.
+--# This module inserts one bubble cycle per packet, as this is the design that
+--# uses the most reasonable tradeoff between the competing variables of
+--# latency, utilization, and combinatorial loading on s_axis.tready. For large
+--# packets, the bubble will be negligible compared to the overall packet, but
+--# for packets sized one beat, the best possible thruput of this module is 50%.
+--#
+--# TODO: Consider an alternate implementation with no bubble cycles.
 --##############################################################################
 
 library ieee;
