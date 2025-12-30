@@ -38,6 +38,11 @@ begin
 
   -- ---------------------------------------------------------------------------
   prc_arb_sel : process(all) begin
+
+    -- Default
+    sel <= s_axis'low;
+
+    -- Override
     for i in s_axis'range loop
       if s_axis(i).tvalid then
         sel <= i;

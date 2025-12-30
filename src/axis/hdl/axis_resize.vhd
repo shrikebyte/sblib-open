@@ -116,14 +116,17 @@ begin
     function find_last_idx (
       vec : std_ulogic_vector
     ) return natural is
-      variable tmp : natural := 0;
+      constant VEC_LEN : natural := vec'length;
+      variable vec_norm : std_ulogic_vector(VEC_LEN - 1 downto 0);
+      variable result  : natural := 0;
     begin
-      for i in vec'low to vec'high loop
-        if vec(i) then
-          tmp := i;
+      vec_norm := vec;
+      for i in 0 to VEC_LEN - 1 loop
+        if vec_norm(i) then
+          result := i;
         end if;
       end loop;
-      return tmp;
+      return result;
     end function;
 
   begin

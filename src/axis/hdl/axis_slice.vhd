@@ -5,6 +5,7 @@
 --# ============================================================================
 --# Slices one input packet into two output packets at a user-specified
 --# byte boundary of the input packet.
+--# This is useful for stripping headers / trailers from a payload.
 --#
 --# NOTICE: Does not pack tkeep for unaligned slices. If this
 --# feature is needed, then instantiate `axis_pack` between the output
@@ -69,7 +70,6 @@ architecture rtl of axis_slice is
   signal shft_tdata : std_ulogic_vector(s_axis.tdata'range);
   signal shft_tuser : std_ulogic_vector(s_axis.tuser'range);
   signal partial_tlast : std_ulogic;
-  signal int0_axis_tid : u_unsigned(0 downto 0);
 
   signal pipe0_axis : axis_t (
     tdata(s_axis.tdata'range),
@@ -77,14 +77,15 @@ architecture rtl of axis_slice is
     tuser(s_axis.tuser'range)
   );
 
-  signal int0_axis : axis_t (
-    tdata(s_axis.tdata'range),
-    tkeep(s_axis.tkeep'range),
-    tuser(s_axis.tuser'range)
-  );
+  signal int_axis_tdata  : std_ulogic_vector(s_axis.tdata'range);
+  signal int_axis_tuser  : std_ulogic_vector(s_axis.tuser'range);
+  signal int_axis_tkeep  : std_ulogic_vector(s_axis.tkeep'range);
+  signal int_axis_tlast  : std_ulogic;
 
   signal shft_tdata_arr : slv_arr_t(1 to KW - 1)(DW - 1 downto 0);
   signal shft_tuser_arr : slv_arr_t(1 to KW - 1)(UW - 1 downto 0);
+
+  signal oe : std_ulogic;
 
 begin
 
@@ -103,10 +104,6 @@ begin
         severity error;
     end if;
   end process;
-
-  -- ---------------------------------------------------------------------------
-  pipe0_axis.tready <= (int0_axis.tready or not int0_axis.tvalid) and
-                       to_sl(((state = ST_TX0) or (state = ST_TX1)));
 
   -- ---------------------------------------------------------------------------
   -- Pre-calculate pipe0_axis_cnt for better timing
@@ -137,8 +134,7 @@ begin
 
   else generate
 
-    s_axis.tready <= pipe0_axis.tready;
-
+    s_axis.tready       <= pipe0_axis.tready;
     pipe0_axis.tvalid   <= s_axis.tvalid;
     pipe0_axis.tlast    <= s_axis.tlast;
     pipe0_axis.tdata    <= s_axis.tdata;
@@ -163,47 +159,55 @@ begin
   end generate;
 
   -- ---------------------------------------------------------------------------
+  oe <= (m0_axis.tready and m1_axis.tready) or not
+        (m0_axis.tvalid or m1_axis.tvalid);
+  pipe0_axis.tready <= oe and to_sl((state = ST_TX0) or (state = ST_TX1));
+
+  -- ---------------------------------------------------------------------------
   prc_fsm : process (clk) begin
     if rising_edge(clk) then
 
       sts_err_runt <= '0';
 
-      if int0_axis.tready then
-        int0_axis.tvalid <= '0';
+      if m0_axis.tready then
+        m0_axis.tvalid <= '0';
+      end if;
+
+      if m1_axis.tready then
+        m1_axis.tvalid <= '0';
       end if;
 
       case state is
         -- ---------------------------------------------------------------------
         when ST_IDLE =>
           if pipe0_axis.tvalid then
-            if pipe0_num_bytes /= 0 then
-              remain_cnt <= pipe0_num_bytes;
-              state    <= ST_TX0;
+            if pipe0_num_bytes = 0 then
+              state <= ST_TX1;
             else
-              state    <= ST_TX1;
+              remain_cnt <= pipe0_num_bytes;
+              state <= ST_TX0;
             end if;
           end if;
 
         -- ---------------------------------------------------------------------
         when ST_TX0 =>
-          if pipe0_axis.tvalid and pipe0_axis.tready then
+          if pipe0_axis.tvalid and oe then
 
-            int0_axis.tvalid  <= '1';
-            int0_axis.tdata   <= pipe0_axis.tdata;
-            int0_axis.tuser   <= pipe0_axis.tuser;
-            int0_axis_tid     <= "0";
+            m0_axis.tvalid  <= '1';
+            int_axis_tdata  <= pipe0_axis.tdata;
+            int_axis_tuser  <= pipe0_axis.tuser;
 
             if remain_cnt > pipe0_axis_cnt then
               -- In the middle of sending packet0
-              int0_axis.tkeep   <= pipe0_axis.tkeep;
+              int_axis_tkeep   <= pipe0_axis.tkeep;
               --
               if pipe0_axis.tlast then
                 sts_err_runt      <= '1';
-                int0_axis.tlast   <= '1';
+                int_axis_tlast   <= '1';
                 remain_cnt <= 0;
                 state <= ST_IDLE;
               else
-                int0_axis.tlast   <= '0';
+                int_axis_tlast   <= '0';
                 remain_cnt <= remain_cnt - pipe0_axis_cnt;
               end if;
               --
@@ -211,8 +215,8 @@ begin
               -- Don't need to slice the last beat because the number of bytes
               -- in the current beat matches up perfectly with the number
               -- of remaining bytes in packet0.
-              int0_axis.tlast   <= '1';
-              int0_axis.tkeep   <= pipe0_axis.tkeep;
+              int_axis_tlast   <= '1';
+              int_axis_tkeep   <= pipe0_axis.tkeep;
               remain_cnt <= 0;
               --
               if pipe0_axis.tlast then
@@ -224,9 +228,9 @@ begin
               --
             else
               -- Need to slice the last beat
-              int0_axis.tlast   <= '1';
-              int0_axis.tkeep(remain_cnt - 1 downto 0) <= pipe0_axis.tkeep(remain_cnt - 1 downto 0);
-              int0_axis.tkeep(KW - 1 downto remain_cnt) <= (others=>'0');
+              int_axis_tlast   <= '1';
+              int_axis_tkeep(remain_cnt - 1 downto 0) <= pipe0_axis.tkeep(remain_cnt - 1 downto 0);
+              int_axis_tkeep(KW - 1 downto remain_cnt) <= (others=>'0');
               --
               if pipe0_axis.tlast then
                 -- If we are slicing on a tlast beat, then tlast needs to be
@@ -251,78 +255,58 @@ begin
 
         -- ---------------------------------------------------------------------
         when ST_PARTIAL =>
-          if int0_axis.tready then
-            -- We already know that int0_axis.tvalid is high here because
+          if m0_axis.tready then
+            -- We already know that m0_axis.tvalid is high here because
             -- it was set by the prev state, so no need to check for it.
-            int0_axis.tvalid  <= '1';
-            int0_axis.tkeep   <= shft_tkeep;
-            int0_axis.tdata   <= shft_tdata;
-            int0_axis.tuser   <= shft_tuser;
-            int0_axis_tid     <= "1";
+            m1_axis.tvalid   <= '1';
+            int_axis_tkeep   <= shft_tkeep;
+            int_axis_tdata   <= shft_tdata;
+            int_axis_tuser   <= shft_tuser;
             --
             if partial_tlast then
-              int0_axis.tlast <= '1';
+              int_axis_tlast <= '1';
               state <= ST_IDLE;
             else
-              int0_axis.tlast <= '0';
+              int_axis_tlast <= '0';
               state <= ST_TX1;
             end if;
             partial_tlast <= '0';
           end if;
 
+        -- ---------------------------------------------------------------------
         when ST_TX1 =>
-          if pipe0_axis.tvalid and pipe0_axis.tready then
-            int0_axis.tvalid  <= '1';
-            int0_axis.tkeep   <= pipe0_axis.tkeep;
-            int0_axis.tdata   <= pipe0_axis.tdata;
-            int0_axis.tuser   <= pipe0_axis.tuser;
-            int0_axis_tid     <= "1";
+          if pipe0_axis.tvalid and oe then
+            m1_axis.tvalid   <= '1';
+            int_axis_tkeep   <= pipe0_axis.tkeep;
+            int_axis_tdata   <= pipe0_axis.tdata;
+            int_axis_tuser   <= pipe0_axis.tuser;
             --
             if pipe0_axis.tlast then
-              int0_axis.tlast  <= '1';
-              state            <= ST_IDLE;
+              int_axis_tlast  <= '1';
+              state           <= ST_IDLE;
             else
-              int0_axis.tlast  <= '0';
+              int_axis_tlast  <= '0';
             end if;
           end if;
-
-        when others =>
-          null;
       end case;
 
       if srst then
-        int0_axis.tvalid <= '0';
-        sts_err_runt     <= '0';
-        state            <= ST_IDLE;
+        m0_axis.tvalid <= '0';
+        m1_axis.tvalid <= '0';
+        sts_err_runt   <= '0';
+        state          <= ST_IDLE;
       end if;
     end if;
   end process;
 
   -- ---------------------------------------------------------------------------
-  prc_out_sel : process (all) begin
-
-    m0_axis.tvalid <= '0';
-    m1_axis.tvalid <= '0';
-    int0_axis.tready <= '0';
-
-    if int0_axis_tid = "0" then
-      m0_axis.tvalid <= int0_axis.tvalid and int0_axis.tready;
-      int0_axis.tready <= m0_axis.tready;
-
-    elsif int0_axis_tid = "1" then
-      m1_axis.tvalid <= int0_axis.tvalid and int0_axis.tready;
-      int0_axis.tready <= m1_axis.tready;
-    end if;
-
-  end process;
-
-  m0_axis.tlast  <= int0_axis.tlast;
-  m0_axis.tkeep  <= int0_axis.tkeep;
-  m0_axis.tdata  <= int0_axis.tdata;
-  m0_axis.tuser  <= int0_axis.tuser;
-  m1_axis.tlast  <= int0_axis.tlast;
-  m1_axis.tkeep  <= int0_axis.tkeep;
-  m1_axis.tdata  <= int0_axis.tdata;
-  m1_axis.tuser  <= int0_axis.tuser;
+  m0_axis.tlast  <= int_axis_tlast;
+  m0_axis.tkeep  <= int_axis_tkeep;
+  m0_axis.tdata  <= int_axis_tdata;
+  m0_axis.tuser  <= int_axis_tuser;
+  m1_axis.tlast  <= int_axis_tlast;
+  m1_axis.tkeep  <= int_axis_tkeep;
+  m1_axis.tdata  <= int_axis_tdata;
+  m1_axis.tuser  <= int_axis_tuser;
 
 end architecture;

@@ -61,7 +61,7 @@ begin
     end if;
   end process;
 
-  gen_assign_m_axis : for i in m_axis'range generate
+  gen_assign_outputs : for i in m_axis'range generate
     int_axis_tready(i) <= m_axis(i).tready;
     m_axis(i).tvalid   <= int_axis_tvalid(i);
     m_axis(i).tlast    <= int_axis_tlast;

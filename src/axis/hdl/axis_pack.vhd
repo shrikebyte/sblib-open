@@ -120,7 +120,7 @@ begin
                        to_sl((state_reg = ST_PACK));
 
   -- ---------------------------------------------------------------------------
-  -- Pre-calculate pipe0_axis_cnt for better timing
+  -- Optionally pre-calculate pipe0_axis_cnt for better timing
   gen_pipe0 : if G_EXTRA_PIPE generate
 
     s_axis.tready <= pipe0_axis.tready or not pipe0_axis.tvalid;
