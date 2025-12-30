@@ -85,7 +85,7 @@ entity bfm_axis_sub is
     -- If false - Check partial beats in the middle of a packet that only
     -- have some or none of their tkeep bits set. Checks that tkeep bits are
     -- always set contiguously from low to high.
-    -- This generic is only applicable if G_ENABLE_TKEEP is true.
+    -- This generic only applicable if G_ENABLE_TKEEP is true.
     G_PACKED_STREAM : boolean := true;
     -- If true: Once asserted, 'ready' will not fall until valid has been asserted (i.e. a
     -- handshake has happened).
@@ -144,111 +144,101 @@ begin
 
   -- ---------------------------------------------------------------------------
   prc_main : process
-    variable ref_data : integer_array_t := null_integer_array;
+    variable data_packet : integer_array_t := null_integer_array;
+    variable user_packet : integer_array_t := null_integer_array;
     variable packet_length_bytes : positive := 1;
-    variable packet_length_beats : positive := 1;
+    variable user_packet_length_bytes : positive := 1;
     variable i : natural := 0;
-    variable k : natural range 0 to KW - 1 := 0;
     variable is_last_beat : boolean := false;
-    variable got_byte : std_ulogic_vector(DBW - 1 downto 0) := (others => '0');
+    variable num_bytes_in_this_beat : integer := 0;
   begin
+
     while is_empty(G_REF_DATA_QUEUE) or enable /= '1' loop
       wait until rising_edge(clk);
     end loop;
-    ref_data := pop_ref(G_REF_DATA_QUEUE);
 
-    packet_length_bytes := length(ref_data);
-    packet_length_beats := (packet_length_bytes + KW - 1) / KW;
+    i := 0;
+    data_packet := pop_ref(G_REF_DATA_QUEUE);
+    user_packet := pop_ref(G_REF_USER_QUEUE);
+    packet_length_bytes := length(data_packet);
+    user_packet_length_bytes := length(user_packet);
+
+    assert packet_length_bytes = user_packet_length_bytes
+      report BASE_ERROR_MESSAGE &
+      "Length mismatch between data packet and user packet.";
 
     checker_is_ready <= '1';
 
     while i < packet_length_bytes loop
-      k := i mod KW;
+      wait until s_axis.tready = '1' and s_axis.tvalid = '1' and rising_edge(clk);
 
-      if k = 0 then
-        wait until s_axis.tready = '1' and s_axis.tvalid = '1' and rising_edge(clk);
+      if G_PACKED_STREAM then
+        num_bytes_in_this_beat := minimum(KW, packet_length_bytes - i);
+      else
+        num_bytes_in_this_beat := cnt_ones(s_axis.tkeep);
+      end if;
 
-        if G_ENABLE_TLAST then
-          is_last_beat := i / KW = packet_length_beats - 1;
-          check_equal(
-            s_axis.tlast,
-            is_last_beat,
-            (
-              BASE_ERROR_MESSAGE
-              & "'tlast' check at packet_idx="
-              & to_string(num_packets_checked)
-              & ",byte_idx="
-              & to_string(i)
-            )
-          );
-        end if;
+      if G_ENABLE_TLAST then
+        is_last_beat := ((packet_length_bytes - i) = num_bytes_in_this_beat);
+        check_equal(
+          s_axis.tlast,
+          to_sl(is_last_beat),
+          (
+            BASE_ERROR_MESSAGE
+            & "'tlast' check at packet_idx="
+            & to_string(num_packets_checked)
+            & ",byte_idx="
+            & to_string(i)
+          )
+        );
       end if;
 
       if G_ENABLE_TKEEP then
-        check_equal(
-          s_axis.tkeep(k),
-          '1',
-          (
-            BASE_ERROR_MESSAGE
-            & "'tkeep' check at packet_idx="
-            & to_string(num_packets_checked)
-            & ", byte_idx="
-            & to_string(i)
-          )
-        );
+        for k in 0 to KW - 1 loop
+          check_equal(s_axis.tkeep(k), to_sl(k < num_bytes_in_this_beat),
+            (
+              BASE_ERROR_MESSAGE
+              & "'tkeep' check at packet_idx="
+              & to_string(num_packets_checked)
+              & ", byte_idx="
+              & to_string(i)
+            )
+          );
+        end loop;
       end if;
 
-      got_byte := s_axis.tdata((k + 1) * DBW - 1 downto k * DBW);
-      if is_signed(ref_data) then
+      for k in 0 to num_bytes_in_this_beat - 1 loop
         check_equal(
-          u_signed(got_byte),
-          get(ref_data, i),
+          u_unsigned(s_axis.tuser((k + 1) * UBW - 1 downto k * UBW)),
+          get(user_packet, i + k),
           (
-            BASE_ERROR_MESSAGE
-            & "'tdata' check at packet_idx="
-            & to_string(num_packets_checked)
-            & ", byte_idx="
-            & to_string(i)
+            BASE_ERROR_MESSAGE &
+            "'tuser' check at packet_idx=" &
+            to_string(num_packets_checked) &
+            ", byte_idx=" &
+            to_string(i)
           )
         );
-      else
         check_equal(
-          u_unsigned(got_byte),
-          get(ref_data, i),
+          u_unsigned(s_axis.tdata((k + 1) * DBW - 1 downto k * DBW)),
+          get(data_packet, i + k),
           (
-            BASE_ERROR_MESSAGE
-            & ": 'tdata' check at packet_idx="
-            & to_string(num_packets_checked)
-            & ", byte_idx="
-            & to_string(i)
-          )
-        );
-      end if;
-      i := i + 1;
-    end loop;
-
-    if G_ENABLE_TKEEP then
-      -- Check tkeep for last data beat. If packet length aligns with the bus
-      -- width, all lanes will
-      -- have been checked as '1' above. If packet is not aligned, one or more
-      -- byte lanes at the top shall be nulled out.
-      for i in k + 1 to KW - 1 loop
-        check_equal(
-          s_axis.tkeep(i),
-          '0',
-          (
-            BASE_ERROR_MESSAGE
-            & "'tkeep' check at packet_idx="
-            & to_string(num_packets_checked)
-            & ", byte_idx="
-            & to_string(i)
+            BASE_ERROR_MESSAGE &
+            "'tdata' check at packet_idx=" &
+            to_string(num_packets_checked) &
+            ", byte_idx=" &
+            to_string(i)
           )
         );
       end loop;
-    end if;
+
+      i := i + num_bytes_in_this_beat;
+
+    end loop;
 
     -- Deallocate after we are done with the data.
-    deallocate(ref_data);
+    deallocate(data_packet);
+    deallocate(user_packet);
 
     -- Default: Signal "not ready" to handshake BFM before next packet.
     -- If queue is not empty, it will instantly be raised again (no bubble cycle).
@@ -258,59 +248,6 @@ begin
   end process;
 
   data_is_ready <= checker_is_ready and enable;
-
-
-  -- ---------------------------------------------------------------------------
-  gen_check_tuser : if UW > 0 generate
-  begin
-
-    assert G_REF_USER_QUEUE /= null_queue
-      report "Must set tuser reference queue";
-
-    -- -------------------------------------------------------------------------
-    prc_check_tuser : process
-      variable user_packet : integer_array_t := null_integer_array;
-      variable packet_length_bytes : positive := 1;
-
-      variable k : natural range 0 to KW - 1 := 0;
-    begin
-    while is_empty(G_REF_USER_QUEUE) or enable /= '1' loop
-      wait until rising_edge(clk);
-    end loop;
-
-      user_packet := pop_ref(G_REF_USER_QUEUE);
-      packet_length_bytes := length(user_packet);
-
-      for i in 0 to packet_length_bytes - 1 loop
-        k := i mod KW;
-
-        if k = 0 then
-          wait until s_axis.tready = '1' and s_axis.tvalid = '1' and rising_edge(clk);
-        end if;
-
-        check_equal(
-          u_unsigned(s_axis.tuser((k + 1) * UBW - 1 downto k * UBW)),
-          get(user_packet, i),
-          BASE_ERROR_MESSAGE &
-          "'tuser' check at packet_idx=" &
-          to_string(num_packets_checked)
-        );
-
-        if G_ENABLE_TLAST and i = packet_length_bytes - 1 then
-          check_equal(
-            s_axis.tlast,
-            true,
-            BASE_ERROR_MESSAGE &
-            "Length mismatch between data packet and user packet"
-          );
-        end if;
-      end loop;
-
-      -- Deallocate after we are done with the data.
-      deallocate(user_packet);
-    end process;
-
-  end generate;
 
 
   ------------------------------------------------------------------------------

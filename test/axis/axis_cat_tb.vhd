@@ -234,9 +234,10 @@ begin
 
   u_bfm_axis_man_0 : entity work.bfm_axis_man
   generic map(
-    G_DATA_QUEUE   => S0_DATA_QUEUE,
-    G_USER_QUEUE   => S0_USER_QUEUE,
-    G_STALL_CONFIG => STALL_CFG
+    G_DATA_QUEUE    => S0_DATA_QUEUE,
+    G_USER_QUEUE    => S0_USER_QUEUE,
+    G_PACKED_STREAM => true,
+    G_STALL_CONFIG  => STALL_CFG
   )
   port map(
     clk    => clk,
@@ -245,9 +246,10 @@ begin
 
   u_bfm_axis_man_1 : entity work.bfm_axis_man
   generic map(
-    G_DATA_QUEUE   => S1_DATA_QUEUE,
-    G_USER_QUEUE   => S1_USER_QUEUE,
-    G_STALL_CONFIG => STALL_CFG
+    G_DATA_QUEUE    => S1_DATA_QUEUE,
+    G_USER_QUEUE    => S1_USER_QUEUE,
+    G_PACKED_STREAM => true,
+    G_STALL_CONFIG  => STALL_CFG
   )
   port map(
     clk    => clk,
@@ -258,6 +260,7 @@ begin
   generic map(
     G_REF_DATA_QUEUE => REF_DATA_QUEUE,
     G_REF_USER_QUEUE => REF_USER_QUEUE,
+    G_PACKED_STREAM  => false,
     G_STALL_CONFIG   => STALL_CFG
   )
   port map(
