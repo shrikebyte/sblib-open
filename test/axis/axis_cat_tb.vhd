@@ -225,11 +225,6 @@ begin
 
   -- ---------------------------------------------------------------------------
   u_axis_cat : entity work.axis_cat
-  generic map (
-    G_DATA_PIPE   => true,
-    G_READY_PIPE  => true,
-    G_PACK_OUTPUT => true
-  )
   port map (
     clk       => clk,
     srst      => srst,

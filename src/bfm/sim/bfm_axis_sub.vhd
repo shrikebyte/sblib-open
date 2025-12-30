@@ -79,6 +79,14 @@ entity bfm_axis_sub is
     G_LOGGER_NAME_SUFFIX : string := "";
     -- Optionally, disable the checking of 'tkeep' bits.
     G_ENABLE_TKEEP : boolean := true;
+    -- If true - Check for a continuous packet stream, where every beat has all
+    -- tkeep bits asserted, expect for tlast, which will pack tkeep bits from
+    -- low to high.
+    -- If false - Check partial beats in the middle of a packet that only
+    -- have some or none of their tkeep bits set. Checks that tkeep bits are
+    -- always set contiguously from low to high.
+    -- This generic is only applicable if G_ENABLE_TKEEP is true.
+    G_PACKED_STREAM : boolean := true;
     -- If true: Once asserted, 'ready' will not fall until valid has been asserted (i.e. a
     -- handshake has happened).
     -- Note that according to the AXI-Stream standard 'ready' may fall at any
@@ -139,7 +147,7 @@ begin
     variable ref_data : integer_array_t := null_integer_array;
     variable packet_length_bytes : positive := 1;
     variable packet_length_beats : positive := 1;
-
+    variable i : natural := 0;
     variable k : natural range 0 to KW - 1 := 0;
     variable is_last_beat : boolean := false;
     variable got_byte : std_ulogic_vector(DBW - 1 downto 0) := (others => '0');
@@ -154,7 +162,7 @@ begin
 
     checker_is_ready <= '1';
 
-    for i in 0 to packet_length_bytes - 1 loop
+    while i < packet_length_bytes loop
       k := i mod KW;
 
       if k = 0 then
@@ -216,6 +224,7 @@ begin
           )
         );
       end if;
+      i := i + 1;
     end loop;
 
     if G_ENABLE_TKEEP then
