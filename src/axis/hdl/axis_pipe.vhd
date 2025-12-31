@@ -15,16 +15,16 @@ use work.axis_pkg.all;
 
 entity axis_pipe is
   generic (
-    G_DATA_PIPE  : boolean  := true;
-    G_READY_PIPE : boolean  := true
+    G_DATA_PIPE  : boolean := true;
+    G_READY_PIPE : boolean := true
   );
   port (
-    clk    : in    std_ulogic;
-    srst   : in    std_ulogic;
+    clk  : in    std_ulogic;
+    srst : in    std_ulogic;
     --
     s_axis : view s_axis_v;
     --
-    m_axis : view m_axis_v;
+    m_axis : view m_axis_v
   );
 end entity;
 
@@ -41,16 +41,15 @@ begin
   -- ---------------------------------------------------------------------------
   gen_ready_pipe : if G_READY_PIPE generate
 
-    signal skid_axis_tlast  : std_ulogic;
-    signal skid_axis_tdata  : std_ulogic_vector(s_axis.tdata'range);
-    signal skid_axis_tkeep  : std_ulogic_vector(s_axis.tkeep'range);
-    signal skid_axis_tuser  : std_ulogic_vector(s_axis.tuser'range);
+    signal skid_axis_tlast : std_ulogic;
+    signal skid_axis_tdata : std_ulogic_vector(s_axis.tdata'range);
+    signal skid_axis_tkeep : std_ulogic_vector(s_axis.tkeep'range);
+    signal skid_axis_tuser : std_ulogic_vector(s_axis.tuser'range);
 
   begin
 
-    prc_ready_pipe : process (clk) begin
+    prc_ready_pipe : process (clk) is begin
       if rising_edge(clk) then
-
         -- Register tready
         if int_axis.tvalid then
           s_axis.tready <= int_axis.tready;
@@ -62,10 +61,10 @@ begin
         -- Store input data to the temporary skid buffer when output ready
         -- suddenly drops.
         if s_axis.tvalid and s_axis.tready and not int_axis.tready then
-          skid_axis_tlast  <= s_axis.tlast;
-          skid_axis_tdata  <= s_axis.tdata;
-          skid_axis_tkeep  <= s_axis.tkeep;
-          skid_axis_tuser  <= s_axis.tuser;
+          skid_axis_tlast <= s_axis.tlast;
+          skid_axis_tdata <= s_axis.tdata;
+          skid_axis_tkeep <= s_axis.tkeep;
+          skid_axis_tuser <= s_axis.tuser;
         end if;
 
         if srst then
@@ -74,7 +73,7 @@ begin
       end if;
     end process;
 
-    prc_out_select : process (all) begin
+    prc_out_select : process (all) is begin
       if s_axis.tready then
         -- Input is ready. Route input directly to output with zero latency.
         int_axis.tvalid <= s_axis.tvalid;
@@ -106,7 +105,6 @@ begin
 
   end generate;
 
-
   -- ---------------------------------------------------------------------------
   gen_data_pipe : if G_DATA_PIPE generate begin
 
@@ -120,20 +118,20 @@ begin
     -- where both are stuck waiting on each other forever.
     int_axis.tready <= m_axis.tready or not m_axis.tvalid;
 
-    prc_data_pipe : process (clk) begin
+    prc_data_pipe : process (clk) is begin
       if rising_edge(clk) then
         if int_axis.tvalid and int_axis.tready then
           -- If there's a new transaction accepted at the input, we also
           -- implicitly know that the output buffer is empty and ready.
-          m_axis.tvalid   <= '1';
-          m_axis.tlast    <= int_axis.tlast;
-          m_axis.tdata    <= int_axis.tdata;
-          m_axis.tkeep    <= int_axis.tkeep;
-          m_axis.tuser    <= int_axis.tuser;
+          m_axis.tvalid <= '1';
+          m_axis.tlast  <= int_axis.tlast;
+          m_axis.tdata  <= int_axis.tdata;
+          m_axis.tkeep  <= int_axis.tkeep;
+          m_axis.tuser  <= int_axis.tuser;
         elsif m_axis.tready then
           -- If no new transaction at the input and output is ready,
           -- de-assert tvalid.
-          m_axis.tvalid   <= '0';
+          m_axis.tvalid <= '0';
         end if;
 
         if srst then

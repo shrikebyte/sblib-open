@@ -24,23 +24,23 @@ use work.axis_pkg.all;
 
 entity axis_demux is
   port (
-    clk    : in    std_ulogic;
-    srst   : in    std_ulogic;
+    clk  : in    std_ulogic;
+    srst : in    std_ulogic;
     --
     s_axis : view s_axis_v;
     --
     m_axis : view (m_axis_v) of axis_arr_t;
     --! Output select
-    sel : in integer range m_axis'range;
+    sel : in    integer range m_axis'range
   );
 end entity;
 
 architecture rtl of axis_demux is
 
-  type state_t is (ST_UNLOCKED, ST_LOCKED);
-  signal state : state_t;
+  type   state_t is (ST_UNLOCKED, ST_LOCKED);
+  signal state   : state_t;
   signal sel_reg : integer range m_axis'range;
-  signal oe : std_ulogic;
+  signal oe      : std_ulogic;
 
   signal int_axis_tvalid : std_ulogic_vector(m_axis'range);
   signal int_axis_tdata  : std_ulogic_vector(s_axis.tdata'range);
@@ -51,13 +51,12 @@ architecture rtl of axis_demux is
 begin
 
   -- ---------------------------------------------------------------------------
-  oe <= m_axis(sel_reg).tready or not m_axis(sel_reg).tvalid;
+  oe            <= m_axis(sel_reg).tready or not m_axis(sel_reg).tvalid;
   s_axis.tready <= oe and to_sl(state = ST_LOCKED);
 
   -- ---------------------------------------------------------------------------
-  prc_select : process(clk) begin
+  prc_select : process (clk) is begin
     if rising_edge(clk) then
-
       if m_axis(sel_reg).tready then
         int_axis_tvalid(sel_reg) <= '0';
       end if;
@@ -66,16 +65,16 @@ begin
         when ST_UNLOCKED =>
           if s_axis.tvalid and oe then
             sel_reg <= sel;
-            state <= ST_LOCKED;
+            state   <= ST_LOCKED;
           end if;
 
         when ST_LOCKED =>
           if s_axis.tvalid and oe then
             int_axis_tvalid(sel_reg) <= '1';
-            int_axis_tlast <= s_axis.tlast;
-            int_axis_tdata <= s_axis.tdata;
-            int_axis_tkeep <= s_axis.tkeep;
-            int_axis_tuser <= s_axis.tuser;
+            int_axis_tlast           <= s_axis.tlast;
+            int_axis_tdata           <= s_axis.tdata;
+            int_axis_tkeep           <= s_axis.tkeep;
+            int_axis_tuser           <= s_axis.tuser;
 
             if s_axis.tlast then
               state <= ST_UNLOCKED;
@@ -84,9 +83,9 @@ begin
       end case;
 
       if srst then
-        int_axis_tvalid <= (others=>'0');
-        sel_reg <= m_axis'low;
-        state  <= ST_UNLOCKED;
+        int_axis_tvalid <= (others=> '0');
+        sel_reg         <= m_axis'low;
+        state           <= ST_UNLOCKED;
       end if;
     end if;
   end process;

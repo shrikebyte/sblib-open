@@ -122,55 +122,48 @@ begin
       constant M0_LEN : integer := get_m0_len;
       constant M1_LEN : integer := get_m1_len;
 
-      variable s_data : integer_array_t :=
-              new_1d (
-                     length    => PACKET_LENGTH_BYTES,
-                     bit_width => DBW,
-                     is_signed => false
-                    );
+      variable s_data : integer_array_t := new_1d (
+        length    => PACKET_LENGTH_BYTES,
+        bit_width => DBW,
+        is_signed => false
+      );
 
-      variable m0_data : integer_array_t :=
-              new_1d (
-                     length    => M0_LEN,
-                     bit_width => DBW,
-                     is_signed => false
-                    );
+      variable m0_data : integer_array_t := new_1d (
+        length    => M0_LEN,
+        bit_width => DBW,
+        is_signed => false
+      );
 
-      variable m1_data : integer_array_t :=
-              new_1d (
-                     length    => M1_LEN,
-                     bit_width => DBW,
-                     is_signed => false
-                    );
+      variable m1_data : integer_array_t := new_1d (
+        length    => M1_LEN,
+        bit_width => DBW,
+        is_signed => false
+      );
 
-      variable s_user : integer_array_t :=
-              new_1d (
-                     length    => PACKET_LENGTH_BYTES,
-                     bit_width => UBW,
-                     is_signed => false
-                    );
+      variable s_user : integer_array_t := new_1d (
+        length    => PACKET_LENGTH_BYTES,
+        bit_width => UBW,
+        is_signed => false
+      );
 
-      variable m0_user : integer_array_t :=
-              new_1d (
-                     length    => M0_LEN,
-                     bit_width => UBW,
-                     is_signed => false
-                    );
+      variable m0_user : integer_array_t := new_1d (
+        length    => M0_LEN,
+        bit_width => UBW,
+        is_signed => false
+      );
 
-      variable m1_user : integer_array_t :=
-              new_1d (
-                     length    => M1_LEN,
-                     bit_width => UBW,
-                     is_signed => false
-                    );
+      variable m1_user : integer_array_t := new_1d (
+        length    => M1_LEN,
+        bit_width => UBW,
+        is_signed => false
+      );
 
       variable j : integer := 0;
 
     begin
 
       assert SPLIT_LENGTH_BYTES >= 0 and SPLIT_LENGTH_BYTES < 2 ** UBW
-        report
-               "ERROR: SPLIT_LENGTH_BYTES > 0 and SPLIT_LENGTH_BYTES < " &
+        report "ERROR: SPLIT_LENGTH_BYTES > 0 and SPLIT_LENGTH_BYTES < " &
                to_string(2 ** UBW)
         severity error;
 

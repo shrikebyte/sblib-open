@@ -102,10 +102,10 @@ package body bfm_pkg is
   ) return integer_array_t is
     constant TOTAL_LENGTH : natural   := length(base_array) + length(end_array);
     variable result : integer_array_t := new_1d(
-                                                length    => TOTAL_LENGTH,
-                                                bit_width => bit_width(base_array),
-                                                is_signed => is_signed(base_array)
-                                               );
+      length    => TOTAL_LENGTH,
+      bit_width => bit_width(base_array),
+      is_signed => is_signed(base_array)
+    );
   begin
     assert bit_width(base_array) = bit_width(end_array)
       report "Can only concatenate similar arrays";

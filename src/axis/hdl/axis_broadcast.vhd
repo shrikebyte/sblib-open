@@ -14,12 +14,12 @@ use work.axis_pkg.all;
 
 entity axis_broadcast is
   port (
-    clk    : in    std_ulogic;
-    srst   : in    std_ulogic;
+    clk  : in    std_ulogic;
+    srst : in    std_ulogic;
     --
     s_axis : view s_axis_v;
     --
-    m_axis : view (m_axis_v) of axis_arr_t;
+    m_axis : view (m_axis_v) of axis_arr_t
   );
 end entity;
 
@@ -38,7 +38,7 @@ begin
   s_axis.tready <= (and int_axis_tready) or not (or int_axis_tvalid);
 
   -- ---------------------------------------------------------------------------
-  prc_broadcast : process(clk) begin
+  prc_broadcast : process (clk) is begin
     if rising_edge(clk) then
 
       for i in m_axis'range loop
@@ -48,7 +48,7 @@ begin
       end loop;
 
       if s_axis.tvalid and s_axis.tready then
-        int_axis_tvalid <= (others=>'1');
+        int_axis_tvalid <= (others=> '1');
         int_axis_tlast  <= s_axis.tlast;
         int_axis_tdata  <= s_axis.tdata;
         int_axis_tkeep  <= s_axis.tkeep;
@@ -56,7 +56,7 @@ begin
       end if;
 
       if srst then
-        int_axis_tvalid <= (others=>'0');
+        int_axis_tvalid <= (others=> '0');
       end if;
     end if;
   end process;

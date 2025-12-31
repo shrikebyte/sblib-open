@@ -46,7 +46,6 @@
 library ieee;
 use ieee.numeric_std.all;
 use ieee.std_logic_1164.all;
-
 use work.axis_pkg.all;
 use work.bfm_pkg.all;
 
@@ -59,30 +58,28 @@ entity bfm_axis_protocol_check is
     G_CLK_TO_Q : time := 0.1 ns
   );
   port (
-    clk : in std_ulogic;
-    srst : in std_ulogic := '0';
+    clk  : in    std_ulogic;
+    srst : in    std_ulogic := '0';
     --
-    mon_axis : view monitor_axis_v;
+    mon_axis : view monitor_axis_v
   );
 end entity;
 
 architecture sim of bfm_axis_protocol_check is
 
-  constant DW  : integer := mon_axis.tdata'length;
-  constant KW  : integer := mon_axis.tkeep'length;
-  constant UW  : integer := mon_axis.tuser'length;
+  constant DW : integer := mon_axis.tdata'length;
+  constant KW : integer := mon_axis.tkeep'length;
+  constant UW : integer := mon_axis.tuser'length;
 
   constant BASE_ERROR_MESSAGE : string := "bfm_axis_protocol_check - " &
     G_LOGGER_NAME_SUFFIX & ": ";
 
-  function get_unstable_error_message(signal_name : string) return string is
+  function get_unstable_error_message (
+    signal_name : string
+  ) return string is
   begin
-    return (
-      BASE_ERROR_MESSAGE
-      & "'"
-      & signal_name
-      & "' changed without transaction while bus was 'valid'."
-    );
+    return BASE_ERROR_MESSAGE & "'" & signal_name
+      & "' changed without transaction while bus was 'valid'.";
   end function;
 
   signal bus_must_be_same_as_previous : std_ulogic := '0';
@@ -90,55 +87,65 @@ architecture sim of bfm_axis_protocol_check is
 begin
 
   -- ---------------------------------------------------------------------------
-  blk_tready_well_defined : block
-    constant error_message : string := BASE_ERROR_MESSAGE &
+
+  blk_tready_well_defined : block is
+
+    constant ERROR_MESSAGE : string := BASE_ERROR_MESSAGE &
       "'tready' has undefined value.";
+
   begin
 
     -- -------------------------------------------------------------------------
-    prc_tready_well_defined_check : process begin
+    prc_tready_well_defined_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
-      assert is_01(mon_axis.tready) report error_message;
+      assert is_01(mon_axis.tready)
+        report ERROR_MESSAGE;
     end process;
 
   end block;
 
-
   -- ---------------------------------------------------------------------------
-  blk_tvalid_well_defined : block
-    constant error_message : string := BASE_ERROR_MESSAGE &
+
+  blk_tvalid_well_defined : block is
+
+    constant ERROR_MESSAGE : string := BASE_ERROR_MESSAGE &
       "'tvalid' has undefined value.";
+
   begin
 
     -- -------------------------------------------------------------------------
-    prc_tvalid_well_defined_check : process begin
+    prc_tvalid_well_defined_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
-      assert is_01(mon_axis.tvalid) report error_message;
+      assert is_01(mon_axis.tvalid)
+        report ERROR_MESSAGE;
     end process;
 
   end block;
 
-
   -- ---------------------------------------------------------------------------
-  blk_handshaking : block
+
+  blk_handshaking : block is
+
     signal tready_ff : std_ulogic := '0';
     signal tvalid_ff : std_ulogic := '0';
 
-    constant error_message : string := BASE_ERROR_MESSAGE &
+    constant ERROR_MESSAGE : string := BASE_ERROR_MESSAGE &
       "'tvalid' fell without transaction.";
+
   begin
 
     -- -------------------------------------------------------------------------
-    prc_handshaking_check : process begin
+    prc_handshaking_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
       if mon_axis.tvalid = '0' and tvalid_ff = '1' then
-        assert tready_ff or srst report error_message;
+        assert tready_ff or srst
+          report ERROR_MESSAGE;
       end if;
 
       tready_ff <= mon_axis.tready;
@@ -147,25 +154,27 @@ begin
 
     -- Nothing on the bus may change while 'valid' is asserted, unless there is
     -- a transaction (i.e. 'ready and valid' is true at a rising edge).
-    bus_must_be_same_as_previous <=
-      mon_axis.tvalid and tvalid_ff and not tready_ff;
+    bus_must_be_same_as_previous <= mon_axis.tvalid and tvalid_ff and not tready_ff;
 
   end block;
 
-
   -- ---------------------------------------------------------------------------
-  blk_tlast : block
-    constant error_message : string := get_unstable_error_message("tlast");
-    signal tlast_ff : std_ulogic := '0';
+
+  blk_tlast : block is
+
+    constant ERROR_MESSAGE : string     := get_unstable_error_message("tlast");
+    signal   tlast_ff      : std_ulogic := '0';
+
   begin
 
     -- -------------------------------------------------------------------------
-    prc_tlast_check : process begin
+    prc_tlast_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
       if bus_must_be_same_as_previous then
-        assert mon_axis.tlast = tlast_ff report error_message;
+        assert mon_axis.tlast = tlast_ff
+          report ERROR_MESSAGE;
       end if;
 
       tlast_ff <= mon_axis.tlast;
@@ -173,20 +182,20 @@ begin
 
   end block;
 
-
   -- ---------------------------------------------------------------------------
   gen_tdata : if DW > 0 generate
-    constant error_message : string := get_unstable_error_message("tdata");
-    signal tdata_ff : std_ulogic_vector(mon_axis.tdata'range) := (others => '0');
+    constant ERROR_MESSAGE : string := get_unstable_error_message("tdata");
+    signal   tdata_ff      : std_ulogic_vector(mon_axis.tdata'range) := (others => '0');
   begin
 
     -- -------------------------------------------------------------------------
-    prc_tdata_check : process begin
+    prc_tdata_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
       if bus_must_be_same_as_previous then
-        assert mon_axis.tdata = tdata_ff report error_message;
+        assert mon_axis.tdata = tdata_ff
+          report error_message;
       end if;
 
       tdata_ff <= mon_axis.tdata;
@@ -194,12 +203,11 @@ begin
 
   end generate;
 
-
   -- ---------------------------------------------------------------------------
   gen_tkeep : if KW > 0 generate
-    constant unstable_error_message : string :=
+    constant UNSTABLE_ERROR_MESSAGE  : string :=
       get_unstable_error_message("tkeep");
-    constant undefined_error_message : string := (
+    constant UNDEFINED_ERROR_MESSAGE : string := (
       BASE_ERROR_MESSAGE & "'tkeep' has undefined value while bus is 'valid'."
     );
 
@@ -207,16 +215,18 @@ begin
   begin
 
     -- -------------------------------------------------------------------------
-    prc_tkeep_check : process begin
+    prc_tkeep_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
       if bus_must_be_same_as_previous then
-        assert mon_axis.tkeep = tkeep_ff report unstable_error_message;
+        assert mon_axis.tkeep = tkeep_ff
+          report unstable_error_message;
       end if;
 
       if mon_axis.tready and mon_axis.tvalid then
-        assert is_01(mon_axis.tkeep) report undefined_error_message;
+        assert is_01(mon_axis.tkeep)
+          report undefined_error_message;
       end if;
 
       tkeep_ff <= mon_axis.tkeep;
@@ -224,20 +234,20 @@ begin
 
   end generate;
 
-
   -- ---------------------------------------------------------------------------
   gen_tuser : if UW > 0 generate
-    constant error_message : string := get_unstable_error_message("tuser");
-    signal tuser_ff : std_ulogic_vector(mon_axis.tuser'range) := (others => '0');
+    constant ERROR_MESSAGE : string := get_unstable_error_message("tuser");
+    signal   tuser_ff      : std_ulogic_vector(mon_axis.tuser'range) := (others => '0');
   begin
 
     -- -------------------------------------------------------------------------
-    prc_tuser_check : process begin
+    prc_tuser_check : process is begin
       wait until rising_edge(clk);
       wait for G_CLK_TO_Q;
 
       if bus_must_be_same_as_previous then
-        assert mon_axis.tuser = tuser_ff report error_message;
+        assert mon_axis.tuser = tuser_ff
+          report error_message;
       end if;
 
       tuser_ff <= mon_axis.tuser;

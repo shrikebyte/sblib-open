@@ -263,6 +263,9 @@ rule:
       - _t
   variable_007:
     disable: true
+  variable_400:
+    align_left: yes
+    align_paren: no
   variable_assignment_004:
     align_left: yes
     align_paren: no
