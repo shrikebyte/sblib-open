@@ -15,7 +15,7 @@ use work.axis_pkg.all;
 entity axis_fifo is
   generic (
     -- Depth of the FIFO in axis beats. Must be a power of 2.
-    G_DEPTH      : positive := 1024;
+    G_DEPTH : positive := 1024;
     -- If true, then output will not go valid until one full packet has been
     -- stored at the input. This guarentees that output valid will never
     -- be lowered during a packet.
@@ -49,8 +49,8 @@ architecture rtl of axis_fifo is
   constant KW : integer := if_then_else(G_USE_TKEEP, m_axis.tkeep'length, 0);
   constant UW : integer := if_then_else(G_USE_TUSER, m_axis.tuser'length, 0);
   constant LW : integer := if_then_else(G_USE_TLAST, 1, 0);
-  constant RW : integer := DW + UW + KW + LW;
-  constant AW : integer := clog2(G_DEPTH) + 1;
+  constant RW : integer := DW + UW + KW + LW; -- Ram width
+  constant AW : integer := clog2(G_DEPTH); -- Address width
 
   signal ram : slv_arr_t(0 to G_DEPTH - 1)(RW - 1 downto 0);
 
@@ -100,7 +100,7 @@ begin
   -- ---------------------------------------------------------------------------
   full <= to_sl(
     wr_ptr(AW) /= rd_ptr(AW) and
-    wr_ptr(AW-1 downto 0) = rd_ptr(AW-1 downto 0)
+    wr_ptr(AW - 1 downto 0) = rd_ptr(AW - 1 downto 0)
   );
 
   empty <= to_sl(wr_ptr = rd_ptr);
@@ -119,7 +119,6 @@ begin
       if srst then
         wr_ptr <= (others => '0');
       end if;
-
     end if;
   end process;
 
@@ -143,7 +142,6 @@ begin
         m_axis.tvalid <= '0';
         rd_ptr <= (others => '0');
       end if;
-
     end if;
   end process;
 
