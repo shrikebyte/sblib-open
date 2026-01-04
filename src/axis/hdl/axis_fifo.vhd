@@ -3,7 +3,7 @@
 --# Auth : David Gussler
 --# Lang : VHDL '08
 --# ============================================================================
---! Synchronous AXI Stream FIFO.
+--# Synchronous AXI Stream FIFO.
 --##############################################################################
 
 library ieee;
@@ -46,7 +46,7 @@ entity axis_fifo is
     --   Packet is dropped.
     -- Only applicable in packet mode.
     ctl_drop : in    std_ulogic;
-    -- Indicates that the last packet was dropped.
+    -- Pulse indicating that the last packet was dropped.
     -- Only applicable in packet mode.
     sts_dropped : out   std_ulogic;
     -- Current speculative fill depth of the FIFO, in beats.
@@ -114,44 +114,42 @@ begin
     m_axis.tlast                   <= rd_data(DW + KW + UW + LW - 1);
   end generate;
 
-  gen_packet_mode : if G_PACKET_MODE generate
+  -- FIFO is ready when not full, unless G_DROP_OVERSIZE is set, in which case
+  -- it is also also "ready" whenever an oversized packet has been detected.
+  -- In the G_DROP_OVERSIZE case, ready stays high but the fifo discards all new
+  -- beats it receives until it gets tlast, at which point it rolls back the
+  -- write pointer to the address it was at before the start of the oversized
+  -- packet, fully discarding the previous beats it received before it knew that
+  -- the packet would be oversized. The FIFO must speculatively store beats
+  -- and later roll them back because there is no way to know a packet's size
+  -- in advance. The packet size isn't known until tlast.
+  s_axis.tready <= not full or (to_sl(G_DROP_OVERSIZE) and full_wr);
 
-    -- ---------------------------------------------------------------------------
-    -- FIFO is full. Updates with the speculative write pointer.
-    full <= to_sl(
-        wr_ptr_spec(AW) /= rd_ptr(AW) and
-        wr_ptr_spec(AW - 1 downto 0) = rd_ptr(AW - 1 downto 0)
-      );
+  -- FIFO is full. Updates with the speculative write pointer.
+  full <= to_sl(
+      wr_ptr_spec(AW) /= rd_ptr(AW) and
+      wr_ptr_spec(AW - 1 downto 0) = rd_ptr(AW - 1 downto 0)
+    );
 
-    -- FIFO is empty. Updates with the committed write pointer.
-    empty <= to_sl(wr_ptr_comm = rd_ptr);
+  -- FIFO is empty. Updates with the committed write pointer.
+  empty <= to_sl(wr_ptr_comm = rd_ptr);
 
-    -- Input packet is oversized.
-    full_wr <= to_sl(
-        wr_ptr_spec(AW) /= wr_ptr_comm(AW) and
-        wr_ptr_spec(AW - 1 downto 0) = wr_ptr_comm(AW - 1 downto 0)
-      );
+  -- Input packet is oversized.
+  full_wr <= to_sl(
+      wr_ptr_spec(AW) /= wr_ptr_comm(AW) and
+      wr_ptr_spec(AW - 1 downto 0) = wr_ptr_comm(AW - 1 downto 0)
+    );
 
-    -- FIFO is ready when not full, unless G_DROP_OVERSIZE is set, in which case
-    -- it is also also "ready" whenever an oversized packet has been detected.
-    -- In the G_DROP_OVERSIZE case, ready stays high but the fifo discards all new
-    -- beats it receives until it gets tlast, at which point it rolls back the
-    -- write pointer to the address it was at before the start of the oversized
-    -- packet, fully discarding the previous beats it received before it knew that
-    -- the packet would be oversized. The FIFO must speculatively store beats
-    -- and later roll them back because there is no way to know a packet's size
-    -- in advance. The packet size isn't known until tlast.
-    s_axis.tready <= not full or (to_sl(G_DROP_OVERSIZE) and full_wr);
+  prc_status : process (clk) is begin
+    if rising_edge(clk) then
+      sts_depth_spec <= wr_ptr_spec - rd_ptr;
+      sts_depth_comm <= wr_ptr_comm - rd_ptr;
+    end if;
+  end process;
 
-    -- ---------------------------------------------------------------------------
-    prc_status : process (clk) is begin
-      if rising_edge(clk) then
-        sts_depth_spec <= wr_ptr_spec - rd_ptr;
-        sts_depth_comm <= wr_ptr_comm - rd_ptr;
-      end if;
-    end process;
+  -- ---------------------------------------------------------------------------
+  gen_packet_mode_wr : if G_PACKET_MODE generate
 
-    -- ---------------------------------------------------------------------------
     prc_write : process (clk) is begin
       if rising_edge(clk) then
         sts_dropped <= '0';
@@ -215,46 +213,9 @@ begin
       end if;
     end process;
 
-    -- ---------------------------------------------------------------------------
-    prc_read : process (clk) is begin
-      if rising_edge(clk) then
-        if m_axis.tready then
-          m_axis.tvalid <= '0';
-        end if;
-
-        if (m_axis.tready or not m_axis.tvalid) and (not empty) then
-          m_axis.tvalid <= '1';
-          rd_ptr        <= rd_ptr + 1;
-          rd_data       <= ram(to_integer(rd_ptr(AW - 1 downto 0)));
-        end if;
-
-        if srst then
-          m_axis.tvalid <= '0';
-          rd_ptr        <= (others => '0');
-        end if;
-      end if;
-    end process;
-
+  -- ---------------------------------------------------------------------------
   else generate
 
-    -- ---------------------------------------------------------------------------
-    full <= to_sl(
-        wr_ptr_spec(AW) /= rd_ptr(AW) and
-        wr_ptr_spec(AW - 1 downto 0) = rd_ptr(AW - 1 downto 0)
-      );
-
-    empty <= to_sl(wr_ptr_spec = rd_ptr);
-
-    s_axis.tready <= not full;
-
-    -- ---------------------------------------------------------------------------
-    prc_status : process (clk) is begin
-      if rising_edge(clk) then
-        sts_depth_spec <= wr_ptr_spec - rd_ptr;
-      end if;
-    end process;
-
-    -- ---------------------------------------------------------------------------
     prc_write : process (clk) is begin
       if rising_edge(clk) then
         if s_axis.tvalid and s_axis.tready then
@@ -268,26 +229,29 @@ begin
       end if;
     end process;
 
-    -- ---------------------------------------------------------------------------
-    prc_read : process (clk) is begin
-      if rising_edge(clk) then
-        if m_axis.tready then
-          m_axis.tvalid <= '0';
-        end if;
-
-        if (m_axis.tready or not m_axis.tvalid) and (not empty) then
-          m_axis.tvalid <= '1';
-          rd_ptr        <= rd_ptr + 1;
-          rd_data       <= ram(to_integer(rd_ptr(AW - 1 downto 0)));
-        end if;
-
-        if srst then
-          m_axis.tvalid <= '0';
-          rd_ptr        <= (others => '0');
-        end if;
-      end if;
-    end process;
+    wr_ptr_comm <= wr_ptr_spec;
+    sts_dropped <= '0';
 
   end generate;
+
+  -- ---------------------------------------------------------------------------
+  prc_read : process (clk) is begin
+    if rising_edge(clk) then
+      if m_axis.tready then
+        m_axis.tvalid <= '0';
+      end if;
+
+      if (m_axis.tready or not m_axis.tvalid) and (not empty) then
+        m_axis.tvalid <= '1';
+        rd_ptr        <= rd_ptr + 1;
+        rd_data       <= ram(to_integer(rd_ptr(AW - 1 downto 0)));
+      end if;
+
+      if srst then
+        m_axis.tvalid <= '0';
+        rd_ptr        <= (others => '0');
+      end if;
+    end if;
+  end process;
 
 end architecture;
