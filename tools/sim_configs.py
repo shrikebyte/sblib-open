@@ -37,36 +37,36 @@ def add_configs(lib):
         )
 
     ## FIFO
-    tb = lib.test_bench("fifo_tb")
+    # tb = lib.test_bench("fifo_tb")
 
-    out_regs = [False]
-    stall_probs = [50]
+    # out_regs = [False]
+    # stall_probs = [50]
 
-    for out_reg, stall_prob in product(out_regs, stall_probs):
-        sim_utils.named_config(
-            tb,
-            {
-                "G_OUT_REG": out_reg,
-                "G_AXIS_STALL_PROB": stall_prob,
-            },
-        )
+    # for out_reg, stall_prob in product(out_regs, stall_probs):
+    #     sim_utils.named_config(
+    #         tb,
+    #         {
+    #             "G_OUT_REG": out_reg,
+    #             "G_AXIS_STALL_PROB": stall_prob,
+    #         },
+    #     )
 
-    ## Async FIFO
-    tb = lib.test_bench("fifo_async_tb")
+    # ## Async FIFO
+    # tb = lib.test_bench("fifo_async_tb")
 
-    out_regs = [False]
-    clk_ratios = [100, 50, 200, 150, 12, 432, 95]
-    stall_probs = [50]
+    # out_regs = [False]
+    # clk_ratios = [100, 50, 200, 150, 12, 432, 95]
+    # stall_probs = [50]
 
-    for out_reg, clk_ratio, stall_prob in product(out_regs, clk_ratios, stall_probs):
-        sim_utils.named_config(
-            tb,
-            {
-                "G_OUT_REG": out_reg,
-                "G_CLK_RATIO": clk_ratio,
-                "G_AXIS_STALL_PROB": stall_prob,
-            },
-        )
+    # for out_reg, clk_ratio, stall_prob in product(out_regs, clk_ratios, stall_probs):
+    #     sim_utils.named_config(
+    #         tb,
+    #         {
+    #             "G_OUT_REG": out_reg,
+    #             "G_CLK_RATIO": clk_ratio,
+    #             "G_AXIS_STALL_PROB": stall_prob,
+    #         },
+    #     )
 
     ## CDC Vector
     tb = lib.test_bench("cdc_vector_tb")
@@ -306,3 +306,25 @@ def add_configs(lib):
                 "G_PACKED_STREAM": packed_stream,
             },
         )
+
+    ############################################################################
+    tb = lib.test_bench("axis_fifo_tb")
+
+    enable_jitter = [True, False]
+    depth = [64]
+    packet_mode = [True, False]
+    drop_oversize = [True, False]
+
+    for enable_jitter, depth, packet_mode, drop_oversize in product(
+        enable_jitter, depth, packet_mode, drop_oversize
+    ):
+        if not (not packet_mode and drop_oversize):
+            sim_utils.named_config(
+                tb,
+                {
+                    "G_ENABLE_JITTER": enable_jitter,
+                    "G_DEPTH": depth,
+                    "G_PACKET_MODE": packet_mode,
+                    "G_DROP_OVERSIZE": drop_oversize,
+                },
+            )

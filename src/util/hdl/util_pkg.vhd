@@ -261,7 +261,7 @@ package util_pkg is
     n : positive
   ) return std_ulogic_vector;
 
-  function if_then_else(
+  function if_then_else (
     cond : boolean;
     if_true : integer;
     if_false : integer
@@ -630,7 +630,7 @@ package body util_pkg is
     return result;
   end function;
 
-  function if_then_else(
+  function if_then_else (
     cond : boolean;
     if_true : integer;
     if_false : integer
