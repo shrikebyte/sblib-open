@@ -10,26 +10,26 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 use work.util_pkg.all;
 
 entity cdc_gray is
   generic (
     G_SYNC_LEN : positive := 2;
-    G_WIDTH    : positive := 8;
     G_OUT_REG  : boolean  := false
   );
   port (
-    src_clk : in    std_logic;
-    src_cnt : in    std_logic_vector(G_WIDTH - 1 downto 0);
-    dst_clk : in    std_logic;
-    dst_cnt : out   std_logic_vector(G_WIDTH - 1 downto 0)
+    src_clk : in    std_ulogic;
+    src_cnt : in    u_unsigned;
+    dst_clk : in    std_ulogic;
+    dst_cnt : out   u_unsigned
   );
 end entity;
 
 architecture rtl of cdc_gray is
 
-  signal src_gray : std_logic_vector(G_WIDTH - 1 downto 0);
-  signal dst_gray : std_logic_vector(G_WIDTH - 1 downto 0);
+  signal src_gray : std_ulogic_vector(src_cnt'length - 1 downto 0);
+  signal dst_gray : std_ulogic_vector(src_cnt'length - 1 downto 0);
 
 begin
 
@@ -38,7 +38,7 @@ begin
   generic map (
     G_USE_SRC_REG => true,
     G_SYNC_LEN    => G_SYNC_LEN,
-    G_WIDTH       => G_WIDTH
+    G_WIDTH       => src_cnt'length
   )
   port map (
     src_clk => src_clk,

@@ -3,7 +3,7 @@
 --# Auth : David Gussler
 --# Lang : VHDL'19
 --# ============================================================================
---! Synchronous AXIS FIFO testbench
+--! Asynchronous AXIS FIFO testbench.
 --##############################################################################
 
 library ieee;
@@ -21,7 +21,7 @@ use work.util_pkg.all;
 use work.axis_pkg.all;
 use work.bfm_pkg.all;
 
-entity axis_fifo_tb is
+entity axis_fifo_async_tb is
   generic (
     RUNNER_CFG      : string;
     G_ENABLE_JITTER : boolean  := true;
@@ -31,7 +31,7 @@ entity axis_fifo_tb is
   );
 end entity;
 
-architecture tb of axis_fifo_tb is
+architecture tb of axis_fifo_async_tb is
 
   -- TB Constants
   constant RESET_TIME : time    := 50 ns;
@@ -296,8 +296,9 @@ begin
   clk <= not clk after CLK_PERIOD / 2;
 
   -- ---------------------------------------------------------------------------
-  u_axis_fifo : entity work.axis_fifo
+  u_axis_fifo_async : entity work.axis_fifo_async
   generic map (
+    G_SYNC_LEN      => 2,
     G_DEPTH         => G_DEPTH,
     G_PACKET_MODE   => G_PACKET_MODE,
     G_DROP_OVERSIZE => G_DROP_OVERSIZE,
@@ -306,15 +307,16 @@ begin
     G_USE_TUSER     => true
   )
   port map (
-    clk    => clk,
-    srst   => srst,
+    s_clk  => s_clk,
+    m_clk  => m_clk,
+    arst   => arst,
     s_axis => s_axis,
     m_axis => m_axis,
     --
-    ctl_drop       => ctl_drop,
-    sts_dropped    => sts_dropped,
-    sts_depth_spec => sts_depth_spec,
-    sts_depth_comm => sts_depth_comm
+    s_ctl_drop       => ctl_drop,
+    s_sts_dropped    => sts_dropped,
+    s_sts_depth_spec => sts_depth_spec,
+    s_sts_depth_comm => sts_depth_comm
   );
 
   u_bfm_axis_man : entity work.bfm_axis_man
@@ -354,11 +356,11 @@ begin
     check_stable(
       clock => clk,
       en    => en,
-    -- Start check when valid arrives
+      -- Start check when valid arrives
       start_event => m_axis.tvalid,
-    -- End check when last arrives
+      -- End check when last arrives
       end_event => end_event,
-    -- Assert that valid is always asserted until last arrives
+      -- Assert that valid is always asserted until last arrives
       expr => m_axis.tvalid,
       msg  => "There was a bubble in m_axis.tvalid!"
     );

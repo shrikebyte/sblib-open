@@ -180,12 +180,12 @@ package util_pkg is
   ) return std_logic;
 
   function bin_to_gray (
-    bin : std_logic_vector
-  ) return std_logic_vector;
+    bin : u_unsigned
+  ) return std_ulogic_vector;
 
   function gray_to_bin (
-    gray : std_logic_vector
-  ) return std_logic_vector;
+    gray : std_ulogic_vector
+  ) return u_unsigned;
 
   function clog2 (
     value : positive
@@ -371,9 +371,9 @@ package body util_pkg is
   -- ---------------------------------------------------------------------------
   -- Convert a binary coded number to a gray coded number
   function bin_to_gray (
-    bin : std_logic_vector
-  ) return std_logic_vector is
-    variable gray : std_logic_vector(bin'range);
+    bin : u_unsigned
+  ) return std_ulogic_vector is
+    variable gray : std_ulogic_vector(bin'length - 1 downto 0);
   begin
     gray(gray'high) := bin(gray'high);
     for i in gray'high - 1 downto 0 loop
@@ -385,9 +385,9 @@ package body util_pkg is
   -- ---------------------------------------------------------------------------
   -- Convert a gray coded number to a binary coded number
   function gray_to_bin (
-    gray : std_logic_vector
-  ) return std_logic_vector is
-    variable bin : std_logic_vector(gray'range);
+    gray : std_ulogic_vector
+  ) return u_unsigned is
+    variable bin : u_unsigned(gray'length - 1 downto 0);
   begin
     bin(gray'high) := gray(gray'high);
     for i in gray'high - 1 downto 0 loop

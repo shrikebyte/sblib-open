@@ -1,7 +1,7 @@
 --##############################################################################
 --# File : axis_fifo.vhd
 --# Auth : David Gussler
---# Lang : VHDL '08
+--# Lang : VHDL '19
 --# ============================================================================
 --# Synchronous AXI Stream FIFO.
 --##############################################################################
@@ -64,7 +64,7 @@ architecture rtl of axis_fifo is
   constant UW : integer := if_then_else(G_USE_TUSER, m_axis.tuser'length, 0);
   constant LW : integer := if_then_else(G_USE_TLAST, 1, 0);
   constant RW : integer := DW + UW + KW + LW; -- Ram width
-  constant AW : integer := clog2(G_DEPTH);    -- Address width
+  constant AW : integer := clog2(G_DEPTH); -- Address width
 
   signal ram     : slv_arr_t(0 to G_DEPTH - 1)(RW - 1 downto 0);
   signal wr_data : std_ulogic_vector(RW - 1 downto 0);
@@ -88,11 +88,11 @@ begin
     severity error;
 
   assert not (G_USE_TLAST = false and G_PACKET_MODE = true)
-    report "G_PACKET_MODE requires G_USE_TLAST to be enabled."
+    report "axis_fifo: G_PACKET_MODE requires G_USE_TLAST to be enabled."
     severity failure;
 
   assert not (G_PACKET_MODE = false and G_DROP_OVERSIZE = true)
-    report "G_DROP_OVERSIZE requires G_PACKET_MODE to be enabled."
+    report "axis_fifo: G_DROP_OVERSIZE requires G_PACKET_MODE to be enabled."
     severity failure;
 
   -- ---------------------------------------------------------------------------
@@ -102,16 +102,22 @@ begin
   gen_assign_tkeep : if G_USE_TKEEP generate
     wr_data(DW + KW - 1 downto DW) <= s_axis.tkeep;
     m_axis.tkeep                   <= rd_data(DW + KW - 1 downto DW);
+  else generate
+    m_axis.tkeep <= (others=>'1');
   end generate;
 
   gen_assign_tuser : if G_USE_TUSER generate
     wr_data(DW + KW + UW - 1 downto DW + KW) <= s_axis.tuser;
     m_axis.tuser                             <= rd_data(DW + KW + UW - 1 downto DW + KW);
+  else generate
+    m_axis.tuser <= (others=>'0');
   end generate;
 
   gen_assign_tlast : if G_USE_TLAST generate
     wr_data(DW + KW + UW + LW - 1) <= s_axis.tlast;
     m_axis.tlast                   <= rd_data(DW + KW + UW + LW - 1);
+  else generate
+    m_axis.tlast <= '1';
   end generate;
 
   -- FIFO is ready when not full, unless G_DROP_OVERSIZE is set, in which case
@@ -237,14 +243,12 @@ begin
   -- ---------------------------------------------------------------------------
   prc_read : process (clk) is begin
     if rising_edge(clk) then
-      if m_axis.tready then
-        m_axis.tvalid <= '0';
-      end if;
-
       if (m_axis.tready or not m_axis.tvalid) and (not empty) then
         m_axis.tvalid <= '1';
         rd_ptr        <= rd_ptr + 1;
         rd_data       <= ram(to_integer(rd_ptr(AW - 1 downto 0)));
+      elsif m_axis.tready then
+        m_axis.tvalid <= '0';
       end if;
 
       if srst then
