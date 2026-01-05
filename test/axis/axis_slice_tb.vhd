@@ -61,7 +61,7 @@ architecture tb of axis_slice_tb is
     tuser(UW - 1 downto 0)
   );
 
-  signal num_bytes    : natural range 0 to MAX_M0_BYTES;
+  signal num_bytes : natural range 0 to MAX_M0_BYTES;
   signal sts_short : std_ulogic;
 
   -- Testbench BFMs
