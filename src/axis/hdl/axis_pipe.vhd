@@ -99,12 +99,7 @@ begin
 
   else generate
 
-    s_axis.tready   <= int_axis.tready;
-    int_axis.tvalid <= s_axis.tvalid;
-    int_axis.tlast  <= s_axis.tlast;
-    int_axis.tdata  <= s_axis.tdata;
-    int_axis.tkeep  <= s_axis.tkeep;
-    int_axis.tuser  <= s_axis.tuser;
+    axis_attach(s_axis, int_axis);
 
   end generate;
 
@@ -145,12 +140,7 @@ begin
 
   else generate
 
-    int_axis.tready <= m_axis.tready;
-    m_axis.tvalid   <= int_axis.tvalid;
-    m_axis.tlast    <= int_axis.tlast;
-    m_axis.tdata    <= int_axis.tdata;
-    m_axis.tkeep    <= int_axis.tkeep;
-    m_axis.tuser    <= int_axis.tuser;
+    axis_attach(int_axis, m_axis);
 
   end generate;
 

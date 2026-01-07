@@ -69,21 +69,21 @@ architecture rtl of axis_slice is
   signal pipe0_num_bytes : natural range 0 to G_MAX_M0_BYTES;
   signal pipe0_axis_cnt  : natural range 0 to KW;
 
-  signal shft_tkeep    : std_ulogic_vector(s_axis.tkeep'range);
-  signal shft_tdata    : std_ulogic_vector(s_axis.tdata'range);
-  signal shft_tuser    : std_ulogic_vector(s_axis.tuser'range);
+  signal shft_tkeep    : std_ulogic_vector(KW - 1 downto 0);
+  signal shft_tdata    : std_ulogic_vector(DW - 1 downto 0);
+  signal shft_tuser    : std_ulogic_vector(UW - 1 downto 0);
   signal partial_tlast : std_ulogic;
 
   signal pipe0_axis : axis_t (
-    tdata(s_axis.tdata'range),
-    tkeep(s_axis.tkeep'range),
-    tuser(s_axis.tuser'range)
+    tkeep(KW - 1 downto 0),
+    tdata(DW - 1 downto 0),
+    tuser(UW - 1 downto 0)
   );
 
-  signal int_axis_tdata : std_ulogic_vector(s_axis.tdata'range);
-  signal int_axis_tuser : std_ulogic_vector(s_axis.tuser'range);
-  signal int_axis_tkeep : std_ulogic_vector(s_axis.tkeep'range);
   signal int_axis_tlast : std_ulogic;
+  signal int_axis_tkeep : std_ulogic_vector(KW - 1 downto 0);
+  signal int_axis_tdata : std_ulogic_vector(DW - 1 downto 0);
+  signal int_axis_tuser : std_ulogic_vector(UW - 1 downto 0);
 
   signal shft_tdata_arr : slv_arr_t(1 to KW - 1)(DW - 1 downto 0);
   signal shft_tuser_arr : slv_arr_t(1 to KW - 1)(UW - 1 downto 0);
@@ -137,14 +137,10 @@ begin
 
   else generate
 
-    s_axis.tready     <= pipe0_axis.tready;
-    pipe0_axis.tvalid <= s_axis.tvalid;
-    pipe0_axis.tlast  <= s_axis.tlast;
-    pipe0_axis.tdata  <= s_axis.tdata;
-    pipe0_axis.tkeep  <= s_axis.tkeep;
-    pipe0_axis.tuser  <= s_axis.tuser;
-    pipe0_axis_cnt    <= cnt_ones_contig(s_axis.tkeep);
-    pipe0_num_bytes   <= num_bytes;
+    axis_attach(s_axis, pipe0_axis);
+
+    pipe0_axis_cnt  <= cnt_ones_contig(s_axis.tkeep);
+    pipe0_num_bytes <= num_bytes;
 
   end generate;
 

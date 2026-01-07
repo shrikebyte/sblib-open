@@ -41,19 +41,8 @@ architecture rtl of axis_pipes is
 
 begin
 
-  s_axis.tready      <= int_axis(0).tready;
-  int_axis(0).tvalid <= s_axis.tvalid;
-  int_axis(0).tlast  <= s_axis.tlast;
-  int_axis(0).tkeep  <= s_axis.tkeep;
-  int_axis(0).tdata  <= s_axis.tdata;
-  int_axis(0).tuser  <= s_axis.tuser;
-
-  int_axis(G_STAGES).tready <= m_axis.tready;
-  m_axis.tvalid             <= int_axis(G_STAGES).tvalid;
-  m_axis.tlast              <= int_axis(G_STAGES).tlast;
-  m_axis.tkeep              <= int_axis(G_STAGES).tkeep;
-  m_axis.tdata              <= int_axis(G_STAGES).tdata;
-  m_axis.tuser              <= int_axis(G_STAGES).tuser;
+  axis_attach(s_axis, int_axis(0));
+  axis_attach(int_axis(G_STAGES), m_axis);
 
   gen_pipes : for i in 0 to G_STAGES - 1 generate
 

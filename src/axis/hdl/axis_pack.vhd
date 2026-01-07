@@ -151,14 +151,9 @@ begin
 
   else generate
 
-    s_axis.tready <= pipe0_axis.tready;
+    axis_attach(s_axis, pipe0_axis);
 
-    pipe0_axis.tvalid <= s_axis.tvalid;
-    pipe0_axis.tlast  <= s_axis.tlast;
-    pipe0_axis.tdata  <= s_axis.tdata;
-    pipe0_axis.tkeep  <= s_axis.tkeep;
-    pipe0_axis.tuser  <= s_axis.tuser;
-    pipe0_axis_cnt    <= cnt_ones_contig(s_axis.tkeep);
+    pipe0_axis_cnt <= cnt_ones_contig(s_axis.tkeep);
 
   end generate;
 

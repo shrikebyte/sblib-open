@@ -61,7 +61,7 @@ entity bfm_axis_protocol_check is
     clk  : in    std_ulogic;
     srst : in    std_ulogic := '0';
     --
-    mon_axis : view monitor_axis_v
+    mon_axis : view mon_axis_v
   );
 end entity;
 

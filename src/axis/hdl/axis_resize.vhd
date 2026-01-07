@@ -93,12 +93,7 @@ begin
   gen_resize_mode : if S_DW = M_DW generate
   begin
 
-    s_axis.tready <= m_axis.tready;
-    m_axis.tvalid <= s_axis.tvalid;
-    m_axis.tlast  <= s_axis.tlast;
-    m_axis.tdata  <= s_axis.tdata;
-    m_axis.tkeep  <= s_axis.tkeep;
-    m_axis.tuser  <= s_axis.tuser;
+    axis_attach(s_axis, m_axis);
 
   -- ---------------------------------------------------------------------------
   -- Downsize mode
@@ -188,6 +183,9 @@ begin
     constant CNT_MAX                 : natural := M_KW - S_KW;
     signal   offset                  : natural range 0 to M_KW - 1;
     signal   offset_plus_current_cnt : natural range 0 to M_KW;
+    signal   data_reg                : std_ulogic_vector(M_DW - 1 downto 0);
+    signal   user_reg                : std_ulogic_vector(M_UW - 1 downto 0);
+    signal   keep_reg                : std_ulogic_vector(M_KW - 1 downto 0);
   begin
 
     assert is_pwr2(DBW)
@@ -208,13 +206,13 @@ begin
 
           if offset = 0 then
             -- First narrow input beat of wide output beat
-            m_axis.tkeep <= (others=> '0');
+            keep_reg <= (others=> '0');
           end if;
 
-          m_axis.tkeep(offset + S_KW - 1 downto offset)                 <= s_axis.tkeep;
-          m_axis.tdata((offset * DBW) + S_DW - 1 downto (offset * DBW)) <= s_axis.tdata;
-          m_axis.tuser((offset * UBW) + S_UW - 1 downto (offset * UBW)) <= s_axis.tuser;
-          m_axis.tlast                                                  <= s_axis.tlast;
+          keep_reg(offset + S_KW - 1 downto offset)                 <= s_axis.tkeep;
+          data_reg((offset * DBW) + S_DW - 1 downto (offset * DBW)) <= s_axis.tdata;
+          user_reg((offset * UBW) + S_UW - 1 downto (offset * UBW)) <= s_axis.tuser;
+          m_axis.tlast                                              <= s_axis.tlast;
 
           if offset_plus_current_cnt > CNT_MAX or s_axis.tlast = '1' then
             m_axis.tvalid <= '1';
@@ -233,6 +231,10 @@ begin
         end if;
       end if;
     end process;
+
+    m_axis.tdata <= data_reg;
+    m_axis.tuser <= user_reg;
+    m_axis.tkeep <= keep_reg;
 
   end generate;
 
